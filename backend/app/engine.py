@@ -114,3 +114,22 @@ def baseline_caps_only(req: PaymentRequest, store: BaseStore) -> str:
     if req.amount > g["per_txn_cap"] or req.amount > settings.hard_cap_per_txn:
         return "BLOCK"
     return "APPROVE"
+
+
+def baseline_policy_only(req: PaymentRequest, store: BaseStore) -> str:
+    """The *fair* baseline: Anumati's full deterministic policy engine with the
+    semantic (Gemini/heuristic) layer switched off. This is read-only — it never
+    writes a decision or receipt — so the eval can isolate the marginal lift the
+    semantic auditor adds over rules alone (allowlist, registry, caps, structuring,
+    cart integrity, …), rather than comparing against a crippled caps-only control."""
+    mandate = store.get("mandates", req.mandate_id)
+    if not mandate or mandate.get("status") != "active":
+        return "BLOCK"
+    findings, hard_fail = run_policy(req, mandate, store)
+    policy_sum = min(100, sum(f.weight for f in findings))
+    risk = 100 if hard_fail else policy_sum
+    if hard_fail or risk >= settings.block_threshold:
+        return "BLOCK"
+    if risk >= settings.step_up_threshold or any(f.code == "STEP_UP_RULE" for f in findings):
+        return "STEP_UP"
+    return "APPROVE"
