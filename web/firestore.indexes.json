@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    { "collectionGroup": "stepups", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "user_id", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "created_at", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stepups", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "created_at", "order": "DESCENDING" } ] },
+    { "collectionGroup": "decisions", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "request.user_id", "order": "ASCENDING" }, { "fieldPath": "created_at", "order": "DESCENDING" } ] },
+    { "collectionGroup": "decisions", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "request.mandate_id", "order": "ASCENDING" }, { "fieldPath": "request.simulated", "order": "ASCENDING" } ] },
+    { "collectionGroup": "receipts", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "mandate_id", "order": "ASCENDING" }, { "fieldPath": "issued_at", "order": "DESCENDING" } ] },
+    { "collectionGroup": "receipts", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "mandate_id", "order": "ASCENDING" }, { "fieldPath": "issued_at", "order": "ASCENDING" } ] },
+    { "collectionGroup": "mandates", "queryScope": "COLLECTION",
+      "fields": [ { "fieldPath": "user_id", "order": "ASCENDING" }, { "fieldPath": "created_at", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}

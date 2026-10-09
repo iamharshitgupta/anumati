@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anumati — agent payment gateway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark">अ</span>
+    <div>
+      <h1>Anumati</h1>
+      <p>Trust · risk · liability gateway for AI-agent payments on UPI</p>
+    </div>
+  </div>
+  <div class="status">
+    <label>API <input id="apiBase" value="" placeholder="https://anumati-xxxx.a.run.app" spellcheck="false"></label>
+    <span id="engineBadge" class="badge">connecting…</span>
+    <span id="rtBadge" class="badge muted">realtime: polling</span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="sandbox" class="active">Red-team sandbox</button>
+  <button data-tab="mandates">Mandates</button>
+  <button data-tab="stepups">Step-ups <span id="suCount" class="pill">0</span></button>
+  <button data-tab="feed">Decision feed</button>
+  <button data-tab="receipts">Receipts</button>
+  <button data-tab="disputes">Disputes</button>
+</nav>
+
+<main>
+<!-- ============================ SANDBOX ============================ -->
+<section id="tab-sandbox" class="tab active">
+  <div class="grid two">
+    <div class="card">
+      <h2>1 · Pick an attack</h2>
+      <p class="hint">A naive shopping agent (KiranaBot) reads a FreshKart page, builds a cart and asks Anumati to authorise the payment. Each scenario plants a different steering attack in the page.</p>
+      <div id="scenarioList" class="scenarios"></div>
+      <div class="row">
+        <label>Agent <select id="agentMode"><option value="naive">naive (scripted, steerable)</option><option value="gemini">Gemini-driven agent</option></select></label>
+        <label>Mandate <select id="sandboxMandate"></select></label>
+      </div>
+      <button id="runBtn" class="primary">Run attack through Anumati →</button>
+    </div>
+    <div class="card">
+      <h2>2 · What the agent read</h2>
+      <p class="hint">Rendered like a shopper sees it. The hidden parts are shown in red below.</p>
+      <div id="merchantView" class="merchant"></div>
+      <details id="hiddenView" class="hidden-content"><summary>Show hidden / injected content</summary><pre id="hiddenPre"></pre></details>
+    </div>
+  </div>
+
+  <div id="result" class="card result" hidden>
+    <div class="verdictRow">
+      <div id="verdict" class="verdict">—</div>
+      <div class="meter"><div id="riskBar"></div><span id="riskLabel"></span></div>
+      <div id="caught" class="caught"></div>
+    </div>
+    <div class="grid two">
+      <div>
+        <h3>Findings</h3>
+        <ul id="findings" class="findings"></ul>
+      </div>
+      <div>
+        <h3>Agent trace</h3>
+        <ol id="trace" class="trace"></ol>
+        <h3>Attempted payment</h3>
+        <pre id="attempt" class="mono"></pre>
+      </div>
+    </div>
+    <div class="row">
+      <button id="openReceipt" class="secondary">Open decision receipt</button>
+      <button id="raiseDispute" class="secondary">Raise a dispute on this decision</button>
+      <span id="stepupNote" class="hint"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ MANDATES ============================ -->
+<section id="tab-mandates" class="tab">
+  <div class="grid two">
+    <div class="card">
+      <h2>Write a mandate in plain language</h2>
+      <p class="hint">Gemini compiles it into enforceable guardrails. You review and sign. Caps are clamped to the UPI Circle delegation ceilings (₹5,000 / txn, ₹15,000 / month).</p>
+      <textarea id="mandateText" rows="4">Order groceries from BigBasket or Zepto every week, up to ₹1,500 per order and ₹5,000 a week. Only these two merchants. Ask me before anything above ₹1,000.</textarea>
+      <div class="row">
+        <label>User <input id="mUser" value="user_demo"></label>
+        <label>Agent <input id="mAgent" value="kiranabot"></label>
+        <label>Days <input id="mTtl" type="number" value="30" style="width:5em"></label>
+      </div>
+      <button id="compileBtn" class="primary">Compile with Gemini →</button>
+      <div id="compiled" hidden>
+        <h3>Compiled guardrails <span id="compilerBadge" class="badge"></span></h3>
+        <pre id="guardrails" class="mono"></pre>
+        <ul id="compilerNotes" class="notes"></ul>
+        <button id="signBtn" class="primary">Looks right — sign &amp; activate</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Your mandates</h2>
+      <div id="mandateList" class="list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ STEP-UPS ============================ -->
+<section id="tab-stepups" class="tab">
+  <div class="card">
+    <h2>Pending confirmations</h2>
+    <p class="hint">When Anumati returns STEP_UP, the agent is held and the account holder gets a one-tap prompt (Firestore realtime listener; FCM push when configured). Approve or decline here.</p>
+    <div id="stepupList" class="list"></div>
+  </div>
+</section>
+
+<!-- ============================ FEED ============================ -->
+<section id="tab-feed" class="tab">
+  <div class="card">
+    <h2>Decision feed</h2>
+    <div id="feed" class="list"></div>
+  </div>
+</section>
+
+<!-- ============================ RECEIPTS ============================ -->
+<section id="tab-receipts" class="tab">
+  <div class="grid two">
+    <div class="card">
+      <h2>Decision receipts</h2>
+      <p class="hint">Canonical JSON · SHA-256 · HMAC signature · hash-chained per mandate. Anyone with the receipt can re-verify it offline.</p>
+      <div class="row"><button id="chainBtn" class="secondary">Verify chain for demo mandate</button><span id="chainResult" class="hint"></span></div>
+      <div id="receiptList" class="list"></div>
+    </div>
+    <div class="card">
+      <h2>Receipt</h2>
+      <pre id="receiptView" class="mono small">select a receipt…</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ DISPUTES ============================ -->
+<section id="tab-disputes" class="tab">
+  <div class="grid two">
+    <div class="card">
+      <h2>Raise a dispute</h2>
+      <div class="row">
+        <label>Decision id <input id="dDecision" placeholder="dec_…"></label>
+        <label>Raised by <select id="dBy"><option>user</option><option>merchant</option><option>agent_provider</option><option>issuer</option></select></label>
+      </div>
+      <textarea id="dClaim" rows="3">I never authorised this payee. My mandate said FreshKart only.</textarea>
+      <button id="disputeBtn" class="primary">Replay decision &amp; draft attribution →</button>
+      <div id="disputeList" class="list"></div>
+    </div>
+    <div class="card">
+      <h2>Attribution memo</h2>
+      <div id="disputeView"><p class="hint">Anumati replays the signed receipt and drafts a neutral attribution across user / agent provider / merchant / issuer, following the AP2 liability matrix. A human closes the case.</p></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>Anumati · AI Builder Cup 2026 · synthetic data only, nothing touches a real rail.</footer>
+
+<script src="firebase-config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

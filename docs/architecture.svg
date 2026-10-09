@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 780" width="1240" height="780" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6475"/></marker>
+    <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e0902a"/></marker>
+    <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d6455a"/></marker>
+    <style>
+      .box { fill:#ffffff; stroke:#2a2f3a; stroke-width:1.4; }
+      .gcp { fill:#f4f7ff; stroke:#3b6fd6; stroke-width:1.4; }
+      .stage { fill:#fff8ec; stroke:#e0902a; stroke-width:1.3; }
+      .t { fill:#1a1d24; }
+      .m { fill:#5b6475; font-size:11.5px; }
+      .h { font-weight:600; font-size:14px; fill:#1a1d24; }
+      .lbl { font-size:11px; fill:#5b6475; }
+      .flow { stroke:#5b6475; stroke-width:1.5; fill:none; marker-end:url(#arr); }
+      .flowA { stroke:#e0902a; stroke-width:2; fill:none; marker-end:url(#arrA); }
+      .flowR { stroke:#d6455a; stroke-width:1.8; fill:none; marker-end:url(#arrR); stroke-dasharray:6 4; }
+      .mono { font-family: IBM Plex Mono, Menlo, monospace; font-size:11px; }
+    </style>
+  </defs>
+  <rect width="1240" height="780" fill="#fafbfc"/>
+  <text x="24" y="34" class="h" font-size="20">Anumati — architecture</text>
+  <text x="24" y="54" class="m">Trust · risk · liability gateway between an AI agent's payment request and the UPI rail. Google Cloud: Firebase · Firestore · Cloud Run · Gemini.</text>
+
+  <!-- ===== Actors ===== -->
+  <rect x="24" y="100" width="190" height="86" class="box" rx="10"/>
+  <text x="40" y="124" class="h">Account holder</text>
+  <text x="40" y="144" class="m">Writes a one-line mandate.</text>
+  <text x="40" y="160" class="m">Gets one-tap STEP_UP prompts.</text>
+  <text x="40" y="176" class="m">Raises disputes.</text>
+
+  <rect x="24" y="300" width="190" height="86" class="box" rx="10"/>
+  <text x="40" y="324" class="h">Agent provider</text>
+  <text x="40" y="344" class="m">KiranaBot (registered agent).</text>
+  <text x="40" y="360" class="m">Reads merchant content, builds</text>
+  <text x="40" y="376" class="m">cart, calls authorize().</text>
+
+  <rect x="24" y="430" width="190" height="86" class="box" rx="10" stroke="#d6455a"/>
+  <text x="40" y="454" class="h">Merchant / content</text>
+  <text x="40" y="474" class="m">Product page, reviews, notices.</text>
+  <text x="40" y="490" class="m" fill="#d6455a">May carry hidden instructions</text>
+  <text x="40" y="506" class="m" fill="#d6455a">aimed at the agent (injection).</text>
+
+  <rect x="24" y="540" width="190" height="72" class="box" rx="10"/>
+  <text x="40" y="564" class="h">Dispute analyst</text>
+  <text x="40" y="584" class="m">Issuer ops / ombudsman. Replays</text>
+  <text x="40" y="600" class="m">signed receipts, closes cases.</text>
+
+  <!-- ===== Firebase console ===== -->
+  <rect x="262" y="100" width="210" height="190" class="gcp" rx="12"/>
+  <text x="278" y="124" class="h">Firebase</text>
+  <text x="278" y="142" class="m">Hosting · Auth · Firestore SDK · FCM</text>
+  <rect x="278" y="154" width="178" height="26" class="box" rx="6"/><text x="288" y="171" class="t">Mandate authoring &amp; signing</text>
+  <rect x="278" y="186" width="178" height="26" class="box" rx="6"/><text x="288" y="203" class="t">Step-up one-tap (realtime)</text>
+  <rect x="278" y="218" width="178" height="26" class="box" rx="6"/><text x="288" y="235" class="t">Decision feed · receipts</text>
+  <rect x="278" y="250" width="178" height="26" class="box" rx="6"/><text x="288" y="267" class="t">Dispute workbench · sandbox</text>
+
+  <!-- ===== Cloud Run gateway ===== -->
+  <rect x="520" y="100" width="470" height="500" class="gcp" rx="14"/>
+  <text x="536" y="124" class="h">Cloud Run — anumati-api (FastAPI, min-instances=1)</text>
+  <text x="536" y="142" class="m">POST /v1/payments/authorize → APPROVE · STEP_UP · BLOCK + Decision Receipt</text>
+
+  <rect x="536" y="156" width="438" height="62" class="stage" rx="8"/>
+  <text x="548" y="176" class="h" font-size="13">1 · Mandate compiler</text>
+  <text x="548" y="194" class="m">Natural language → Guardrails JSON (Gemini structured output; heuristic fallback)</text>
+  <text x="548" y="209" class="m">Caps clamped to UPI Circle ceilings · enforceable only after the user signs</text>
+
+  <rect x="536" y="228" width="212" height="140" class="stage" rx="8"/>
+  <text x="548" y="248" class="h" font-size="13">2a · Policy engine</text>
+  <text x="548" y="264" class="m">deterministic, auditor-replayable</text>
+  <text x="548" y="283" class="m">mandate state · expiry · agent binding</text>
+  <text x="548" y="298" class="m">rail ceiling · per-txn &amp; period caps</text>
+  <text x="548" y="313" class="m">velocity · structuring (cap splitting)</text>
+  <text x="548" y="328" class="m">payee via verified merchant dir.</text>
+  <text x="548" y="343" class="m">suspect registry · FRI · categories</text>
+  <text x="548" y="358" class="m">cart ≠ amount · quantity anomalies</text>
+
+  <rect x="762" y="228" width="212" height="140" class="stage" rx="8"/>
+  <text x="774" y="248" class="h" font-size="13">2b · Semantic audit</text>
+  <text x="774" y="264" class="m">Gemini, heuristic fallback</text>
+  <text x="774" y="283" class="m">in: mandate · consumed content ·</text>
+  <text x="774" y="298" class="m">agent reasoning trace · final payment</text>
+  <text x="774" y="318" class="m"><tspan font-weight="600">injection_score</tspan> — instructions aimed</text>
+  <text x="774" y="333" class="m">at the agent, quoted verbatim</text>
+  <text x="774" y="350" class="m"><tspan font-weight="600">drift_score</tspan> — payee / qty / price /</text>
+  <text x="774" y="365" class="m">category deviation from mandate</text>
+
+  <rect x="536" y="378" width="438" height="56" class="stage" rx="8"/>
+  <text x="548" y="398" class="h" font-size="13">3 · Risk fusion → verdict</text>
+  <text x="548" y="414" class="m">hard fail → BLOCK · risk = f(Σ policy weights, injection, drift)</text>
+  <text x="548" y="428" class="m">risk ≥ 70 → BLOCK · ≥ 40 or step-up rule → STEP_UP · else APPROVE</text>
+
+  <rect x="536" y="444" width="212" height="74" class="stage" rx="8"/>
+  <text x="548" y="464" class="h" font-size="13">4 · Receipt signer</text>
+  <text x="548" y="482" class="m">canonical JSON → SHA-256 → HMAC</text>
+  <text x="548" y="497" class="m">prev_hash chain per mandate</text>
+  <text x="548" y="512" class="m">liability hints · plain-language memo</text>
+
+  <rect x="762" y="444" width="212" height="74" class="stage" rx="8"/>
+  <text x="774" y="464" class="h" font-size="13">5 · Dispute attribution</text>
+  <text x="774" y="482" class="m">replay receipt → party, confidence,</text>
+  <text x="774" y="497" class="m">established / unresolved / evidence</text>
+  <text x="774" y="512" class="m">needed (AP2 liability matrix)</text>
+
+  <rect x="536" y="530" width="438" height="56" class="box" rx="8" stroke-dasharray="4 3"/>
+  <text x="548" y="550" class="h" font-size="13">Red-team sandbox (same container)</text>
+  <text x="548" y="567" class="m">/sim/merchant/{scenario}: mock pages (clean + 7 attacks)</text>
+  <text x="548" y="581" class="m">/sim/run: naive or Gemini-driven shopping agent → gateway</text>
+
+  <!-- ===== Right column ===== -->
+  <rect x="1030" y="156" width="186" height="110" class="gcp" rx="12"/>
+  <text x="1046" y="180" class="h">Gemini 2.5 Flash</text>
+  <text x="1046" y="198" class="m">Gemini API or Vertex AI</text>
+  <text x="1046" y="218" class="m">· mandate compilation</text>
+  <text x="1046" y="234" class="m">· injection + drift audit</text>
+  <text x="1046" y="250" class="m">· dispute attribution memo</text>
+
+  <rect x="1030" y="378" width="186" height="90" class="box" rx="12" stroke-dasharray="5 4"/>
+  <text x="1046" y="402" class="h">UPI rail (simulated)</text>
+  <text x="1046" y="420" class="m">UAP · UPI Circle · Reserve Pay</text>
+  <text x="1046" y="436" class="m">collect/pay is created only on</text>
+  <text x="1046" y="452" class="m">APPROVE or confirmed STEP_UP</text>
+
+  <rect x="1030" y="500" width="186" height="60" class="gcp" rx="12"/>
+  <text x="1046" y="524" class="h">Secret Manager</text>
+  <text x="1046" y="542" class="m">receipt signing key · Gemini key</text>
+
+  <!-- ===== Firestore ===== -->
+  <rect x="262" y="630" width="954" height="124" class="gcp" rx="14"/>
+  <text x="278" y="654" class="h">Firestore (native) — browser reads under rules, all writes from Cloud Run</text>
+  <g class="mono">
+    <rect x="278" y="670" width="118" height="30" class="box" rx="6"/><text x="288" y="689">mandates</text>
+    <rect x="404" y="670" width="118" height="30" class="box" rx="6"/><text x="414" y="689">agents</text>
+    <rect x="530" y="670" width="118" height="30" class="box" rx="6"/><text x="540" y="689">decisions</text>
+    <rect x="656" y="670" width="118" height="30" class="box" rx="6" stroke="#e0902a"/><text x="666" y="689">stepups ⚡</text>
+    <rect x="782" y="670" width="118" height="30" class="box" rx="6"/><text x="792" y="689">receipts ⛓</text>
+    <rect x="908" y="670" width="118" height="30" class="box" rx="6"/><text x="918" y="689">disputes</text>
+    <rect x="1034" y="670" width="170" height="30" class="box" rx="6"/><text x="1044" y="689">merchant_directory</text>
+    <rect x="278" y="708" width="170" height="30" class="box" rx="6"/><text x="288" y="727">suspect_registry (I4C)</text>
+    <rect x="456" y="708" width="130" height="30" class="box" rx="6"/><text x="466" y="727">fri_scores</text>
+  </g>
+  <text x="600" y="727" class="m">⚡ realtime listener → one-tap confirmation in the console · ⛓ hash-chained, HMAC-signed, offline-verifiable</text>
+
+  <!-- ===== Flows ===== -->
+  <path d="M214 143 L262 143" class="flow"/>
+  <path d="M472 167 L520 167" class="flow"/><text x="476" y="160" class="lbl">compile · sign</text>
+
+  <path d="M214 343 C 330 343, 420 300, 520 300" class="flowA"/>
+  <text x="236" y="362" class="lbl" fill="#e0902a">authorize(payee, amount, cart,</text>
+  <text x="236" y="375" class="lbl" fill="#e0902a">trace, consumed content)</text>
+
+  <path d="M120 430 L120 386" class="flowR"/><text x="128" y="412" class="lbl" fill="#d6455a">page content</text>
+
+  <path d="M990 225 L1030 225" class="flow"/><text x="998" y="238" class="lbl">JSON</text>
+
+  <path d="M990 406 L1030 406" class="flowA"/><text x="994" y="399" class="lbl" fill="#e0902a">APPROVE</text>
+
+  <path d="M1030 530 L990 530" class="flow" stroke-dasharray="3 3"/><text x="996" y="523" class="lbl">keys</text>
+
+  <path d="M755 600 L755 630" class="flow"/><text x="762" y="620" class="lbl">writes</text>
+
+  <path d="M367 630 L367 290" class="flowA" stroke-dasharray="2 3"/>
+  <text x="374" y="470" class="lbl" fill="#e0902a">onSnapshot:</text>
+  <text x="374" y="484" class="lbl" fill="#e0902a">STEP_UP → one-tap</text>
+
+  <path d="M214 576 C 240 576, 240 290, 262 290" class="flow"/>
+  <text x="222" y="532" class="lbl">replay</text>
+
+  <!-- legend -->
+  <rect x="24" y="630" width="214" height="124" class="box" rx="10"/>
+  <text x="38" y="652" class="h" font-size="13">Legend</text>
+  <path d="M38 670 L78 670" class="flowA"/><text x="86" y="674" class="lbl">payment / verdict path</text>
+  <path d="M38 692 L78 692" class="flow"/><text x="86" y="696" class="lbl">control &amp; data</text>
+  <path d="M38 714 L78 714" class="flowR"/><text x="86" y="718" class="lbl">untrusted content</text>
+  <rect x="38" y="728" width="40" height="14" class="gcp" rx="3"/><text x="86" y="739" class="lbl">Google Cloud service</text>
+</svg>

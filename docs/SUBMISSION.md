@@ -1,0 +1,43 @@
+# Submission pack — AI Builder Cup 2026 (BFSI track)
+
+Fill the form fields from here. Deadline **18 Oct 2026, 11:59 PM IST**.
+
+## Challenge
+BFSI: Intelligent Risk, Fraud & Financial Experiences
+
+## Prototype link (Cloud Run / Firebase Hosting)
+`https://<project>.web.app` — console (proxies the API)
+`https://anumati-api-<hash>-<region>.a.run.app` — API (`/docs`, `/healthz`)
+
+## GitHub
+`https://github.com/iamharshitgupta/anumati` (public)
+
+## Demo video
+≤ 3:00 — see `DEMO_SCRIPT.md`.
+
+## Brief description (≤ 1,024 chars — this is 1,012)
+
+Anumati is a trust, risk and liability gateway for AI-agent-initiated UPI payments. As NPCI's Unified Agent Protocol lets agents pay without per-transaction approval, a signed mandate proves authorisation but not that the agent wasn't steered by hidden page text, poisoned reviews or a payee swap. Anumati sits between agent and rail: Gemini compiles a one-line mandate into enforceable guardrails; every payment is dual-checked by a deterministic policy engine (caps, velocity, structuring, verified-merchant payee resolution, suspect registry) and a Gemini semantic audit of the content the agent read and its reasoning (injection and intent-drift scores); the verdict is APPROVE, STEP_UP or BLOCK; each decision issues a signed, hash-chained receipt that a dispute workbench replays to draft liability attribution. Built on Cloud Run (gateway, policy engine, red-team sandbox), Firestore (mandates, decisions, receipts; realtime step-up listeners), Firebase (Hosting, Auth, console, FCM) and Gemini 2.5 Flash.
+
+## Deck (use the prescribed template → export PDF ≤ 5 MB)
+
+Suggested slide mapping onto the template's sections:
+
+1. **Team / title** — Anumati: the liability layer for agentic UPI payments.
+2. **Problem** — UAP/AP2 prove authorisation, not faithfulness; prompt injection is the top agentic risk; legacy fraud engines are blind; ₹ mule-network scale; 30–60 s windows. Liability framework unpublished.
+3. **Solution** — mandate compiler → dual-check engine → graduated verdict → signed receipt → dispute attribution. (architecture.png)
+4. **Demo** — three screenshots: hidden-injection BLOCK, step-up one-tap, dispute memo.
+5. **Why it works** — deterministic + semantic; agent-declared fields untrusted; receipts verifiable offline; fail-safe fallbacks.
+6. **Results** — eval table (Anumati vs caps-only), latency, 8/8 sandbox scenarios.
+7. **Google Cloud** — service-by-service mapping (table in README).
+8. **Market & go-to-market** — issuers/PSPs onboarding agents under UAP; agent providers needing a predictable contract; ombudsman evidence standard.
+9. **Roadmap** — real AP2 VDC/UAP credential verification, I4C/FRI feeds, Cloud KMS signing, issuer tuning console, agent SDK.
+10. **Ask / contact**.
+
+## Pre-submission checklist
+- [ ] `healthz` returns `semantic_engine: gemini` on the deployed URL
+- [ ] Cloud Run `min-instances=1`; budget alert set
+- [ ] Firebase config pasted; step-up toast works in a fresh incognito window
+- [ ] Repo public; README renders; `eval/RESULTS.md` committed from a Gemini run
+- [ ] Video ≤ 3:00, public link, plays without login
+- [ ] Deck exported from the official template as PDF ≤ 5 MB

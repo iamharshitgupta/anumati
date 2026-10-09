@@ -1,0 +1,20 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": ["firebase.json", "firestore.rules", "firestore.indexes.json", ".firebaserc*", "**/.*"],
+    "rewrites": [
+      { "source": "/v1/**", "run": { "serviceId": "anumati-api", "region": "asia-south1" } },
+      { "source": "/sim/**", "run": { "serviceId": "anumati-api", "region": "asia-south1" } },
+      { "source": "/healthz", "run": { "serviceId": "anumati-api", "region": "asia-south1" } },
+      { "source": "/docs", "run": { "serviceId": "anumati-api", "region": "asia-south1" } },
+      { "source": "/openapi.json", "run": { "serviceId": "anumati-api", "region": "asia-south1" } }
+    ],
+    "headers": [
+      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
