@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,15 @@ from .store import get_store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.seed_on_start:
+        info = seed(get_store())
+        logging.getLogger("anumati").info("seeded demo data: %s", info)
+    yield
+
+
 app = FastAPI(
     title="Anumati — trust & liability gateway for AI-agent payments",
     version=__version__,
@@ -22,18 +32,12 @@ app = FastAPI(
         "mandates into policy, dual-checks every agent payment (deterministic policy + Gemini semantic audit), "
         "returns APPROVE / STEP_UP / BLOCK, and issues signed, hash-chained Decision Receipts for dispute resolution."
     ),
+    lifespan=lifespan,
 )
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
 
 for r in (mandates, agents, decisions, stepups, disputes, sim):
     app.include_router(r.router)
-
-
-@app.on_event("startup")
-def _startup():
-    if settings.seed_on_start:
-        info = seed(get_store())
-        logging.getLogger("anumati").info("seeded demo data: %s", info)
 
 
 @app.get("/healthz")
