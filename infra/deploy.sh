@@ -13,6 +13,7 @@ REGION="${REGION:-asia-south1}"
 SERVICE="${SERVICE:-anumati-api}"
 MODEL="${GEMINI_MODEL:-gemini-2.5-flash}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HOST_URL="https://$PROJECT.web.app"   # default Firebase Hosting site
 
 echo "▶ project=$PROJECT region=$REGION service=$SERVICE"
 gcloud config set project "$PROJECT" >/dev/null
@@ -31,15 +32,21 @@ fi
 SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
 gcloud secrets add-iam-policy-binding anumati-receipt-key --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor >/dev/null
 
-ENV_VARS="ANUMATI_STORE=firestore,GOOGLE_CLOUD_PROJECT=$PROJECT,GEMINI_MODEL=$MODEL,RECEIPT_KEY_ID=kms-v1,CORS_ORIGINS=*"
+# CORS is scoped to the Hosting origin (the console is same-origin via the proxy anyway);
+# override CORS_ORIGINS if you call the API directly from another browser origin.
+ENV_VARS="ANUMATI_STORE=firestore,GOOGLE_CLOUD_PROJECT=$PROJECT,GEMINI_MODEL=$MODEL,RECEIPT_KEY_ID=kms-v1,CORS_ORIGINS=${CORS_ORIGINS:-$HOST_URL}"
 if [[ "${USE_VERTEX:-0}" == "1" ]]; then
   ENV_VARS="$ENV_VARS,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_LOCATION=$REGION"
   gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role=roles/aiplatform.user >/dev/null
   SECRETS="RECEIPT_SIGNING_KEY=anumati-receipt-key:latest"
 else
   : "${GOOGLE_API_KEY:?set GOOGLE_API_KEY or USE_VERTEX=1}"
+  # create the secret if absent, otherwise add a NEW VERSION so a rotated key is actually
+  # picked up (the earlier "skip if exists" silently kept a stale key).
   if ! gcloud secrets describe anumati-gemini-key >/dev/null 2>&1; then
     printf '%s' "$GOOGLE_API_KEY" | gcloud secrets create anumati-gemini-key --data-file=- >/dev/null
+  else
+    printf '%s' "$GOOGLE_API_KEY" | gcloud secrets versions add anumati-gemini-key --data-file=- >/dev/null
   fi
   gcloud secrets add-iam-policy-binding anumati-gemini-key --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor >/dev/null
   SECRETS="RECEIPT_SIGNING_KEY=anumati-receipt-key:latest,GOOGLE_API_KEY=anumati-gemini-key:latest"
@@ -57,9 +64,12 @@ curl -fsS "$API_URL/healthz" && echo
 echo "▶ Firebase Hosting + Firestore rules/indexes"
 cd "$ROOT/web"
 [[ -f .firebaserc ]] || sed "s/YOUR_GCP_PROJECT_ID/$PROJECT/" .firebaserc.example > .firebaserc
+# Rewrite region/serviceId into firebase.json for the deploy, then restore the tracked
+# file so the working tree is left clean (even on failure).
+cp firebase.json firebase.json.orig
+trap 'mv -f "$ROOT/web/firebase.json.orig" "$ROOT/web/firebase.json" 2>/dev/null || true' EXIT
 sed -i.bak "s/\"region\": \"[a-z0-9-]*\"/\"region\": \"$REGION\"/g; s/\"serviceId\": \"[a-z0-9-]*\"/\"serviceId\": \"$SERVICE\"/g" firebase.json && rm -f firebase.json.bak
 firebase deploy --only firestore:rules,firestore:indexes,hosting --project "$PROJECT"
-HOST_URL="https://$PROJECT.web.app"
 echo
 echo "✔ Console: $HOST_URL"
 echo "✔ API:     $API_URL   (also proxied at $HOST_URL/v1/*)"
