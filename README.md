@@ -86,3 +86,67 @@ tests/     pytest                              infra/    deploy.sh
 ## Honest scope
 
 Synthetic data only. No real UPI integration; the rail is simulated. Registries (I4C suspect registry, DoT FRI, NPCI verified merchants) are mocks with the right shape. The heuristic semantic engine was tuned on the included suite — treat `RESULTS.md` as a regression suite and the Gemini run as the independent number.
+
+## Local development
+
+Requires Python 3.12+ and (optionally) the `firebase` CLI for deploys.
+
+```bash
+# backend
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt pytest
+cd backend && ../.venv/bin/python -m uvicorn app.main:app --port 8080     # heuristic engine
+# with Gemini:  GOOGLE_API_KEY=... ../.venv/bin/python -m uvicorn app.main:app --port 8080
+
+# console (separate shell) — points at http://localhost:8080 by default
+cd web && python3 -m http.server 5173     # open http://localhost:5173
+
+# tests + eval (from the repo root)
+.venv/bin/python -m pytest tests -q
+.venv/bin/python eval/build_cases.py      # regenerate eval/cases.json
+.venv/bin/python eval/run_eval.py         # writes eval/RESULTS.md (+ eval/results.json)
+```
+
+The store defaults to in-memory and the semantic engine to heuristics, so nothing above
+needs a cloud account or an API key. Set `GOOGLE_API_KEY` to switch the semantic audit,
+mandate compiler and dispute memo to Gemini; set `ANUMATI_STORE=firestore` (on Cloud Run)
+for the Firestore backend. All knobs live in `backend/app/config.py` and are env-driven.
+
+## Evaluation methodology
+
+`eval/run_eval.py` runs every case through the **real** gateway (`decide()`), not a
+label-vs-label assertion, and compares three controls on identical inputs:
+
+| Control | What it is |
+|---|---|
+| **Anumati** | full gateway: deterministic policy **+** semantic audit |
+| **Policy-only** | the same deterministic policy with the semantic layer off — the *fair* baseline |
+| **Caps-only** | a naive UPI-Circle control that checks amount ceilings and nothing else |
+
+The suite is **44 cases (25 attack / 19 benign)**, the benign set including hard
+negatives — legitimate orders that look risky but must not be flagged. Because the
+heuristic thresholds were tuned against this suite, `RESULTS.md` is a **regression
+suite** (an upper bound), and the independent number is the `GOOGLE_API_KEY=...` Gemini
+run. The report isolates the semantic layer's **marginal lift**: the attacks Anumati
+flags that deterministic policy alone does not — the content-steering manipulations
+that break no hard rule. See [`eval/RESULTS.md`](eval/RESULTS.md).
+
+## Security & trust model
+
+- **Agent-declared fields are untrusted** (`merchant`, `category`, reasoning trace).
+  Payee legitimacy is resolved through the verified merchant directory and explicit
+  allowlists — never the name the agent typed.
+- **Consumed content is hostile by default.** It is only ever an input to scoring;
+  nothing in it is executed or followed.
+- **Gemini is advisory.** Its scores feed fusion but cannot override a hard policy
+  failure, and its absence degrades to heuristics — never to approve-by-default.
+- **Firestore rules block all browser writes;** every write goes through the Cloud Run
+  API (Admin SDK). The demo rules allow authenticated reads across the single-tenant
+  synthetic dataset; a production per-user ruleset ships commented in
+  `web/firestore.rules`. Secrets live in Secret Manager; the HMAC signing key is
+  swappable for Cloud KMS without changing the receipt format.
+
+## Version history
+
+The repository history starts with the build as received, then one commit per review
+theme — see [`CHANGELOG.md`](CHANGELOG.md) and `git log`.

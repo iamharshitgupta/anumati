@@ -1,0 +1,58 @@
+# Changelog
+
+All notable changes to Anumati are recorded here. The repository history is organised
+as an initial import of the build *as received*, followed by one commit per review
+theme, so the before/after of every change is visible in `git log` and `git diff`.
+
+## [0.1.1] — Review pass
+
+A correctness, honesty and hardening pass over the initial build. No feature was
+removed; the decision engine's behaviour is unchanged except where noted.
+
+### Evaluation (credibility)
+- Added a **fair deterministic-policy baseline** (`baseline_policy_only` in
+  `backend/app/engine.py`) alongside the existing caps-only control. It runs the full
+  policy engine with the semantic layer switched off, is read-only (never persists a
+  decision or receipt), and lets the suite isolate the **marginal lift** the semantic
+  auditor adds over rules alone.
+- Added **4 hard negatives** to `eval/build_cases.py`: legitimate orders that look
+  risky but must not be flagged (just under the step-up line; a high-but-legal
+  quantity of 8; a benign page with promo/urgency wording; a near-cap order at the
+  second allowed merchant). The suite grew from 40 → **44 cases (25 attack / 19 benign)**.
+- `eval/run_eval.py` now computes both baselines read-only *before* each decision is
+  persisted (so structuring sequences are scored fairly), reports three controls side
+  by side, names the attacks only the semantic layer catches, and stamps `RESULTS.md`
+  with an explicit regression-suite caveat.
+- Honest heuristic-engine result: **Anumati 100% / policy-only 92% / caps-only 12%**
+  attacks flagged, **0% false flags** across all pass-benign cases including the hard
+  negatives. The semantic layer's unique contribution is **2 of 25 attacks**
+  (content-driven upsell/quantity pressure that violates no hard rule).
+
+### Mandate compiler
+- The compiler now recognises the demo merchant ("freshkart") and the phrase
+  "never pay a new payee", so the heuristic compile of the demo mandate is correct.
+- The demo mandate's weekly cap was lowered from ₹6,000 to ₹3,000 so it respects the
+  ₹15,000/month UPI Circle ceiling (₹6,000/week ≈ ₹25,800/month exceeded it).
+- `seed.py` now runs the real compiler and only reconciles against sandbox invariants
+  as a no-op safety net, instead of unconditionally overwriting the compiler output.
+
+### API
+- Replaced the deprecated `@app.on_event("startup")` hook with a lifespan handler.
+
+### Security & infra
+- `web/firestore.rules`: documented the demo's anonymous-read exposure explicitly and
+  shipped a ready-to-enable production per-user ruleset. All writes remain blocked.
+- `infra/deploy.sh`: CORS scoped to the Hosting origin instead of `*`; a rotated
+  `GOOGLE_API_KEY` now adds a new Secret Manager version instead of being silently
+  ignored; `firebase.json` is restored after deploy so the working tree stays clean.
+
+### Docs
+- PRD (both copies), README, architecture, demo script and submission pack updated to
+  the honest eval framing and the new case counts.
+
+## [0.1.0] — Initial import
+
+The build as received: FastAPI gateway (mandate compiler, policy engine, semantic
+audit, receipts, disputes, red-team sandbox), Firebase Hosting console, 40-case eval
+suite with a caps-only baseline, one-shot deploy script, and full docs. Built for
+AI Builder Cup 2026, BFSI track.
