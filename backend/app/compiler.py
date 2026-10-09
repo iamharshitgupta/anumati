@@ -41,12 +41,12 @@ _SCHEMA = {
 }
 
 _KNOWN_MERCHANTS = [
-    "bigbasket", "zepto", "blinkit", "swiggy", "zomato", "instamart", "amazon", "flipkart",
+    "freshkart", "bigbasket", "zepto", "blinkit", "swiggy", "zomato", "instamart", "amazon", "flipkart",
     "uber", "ola", "rapido", "netflix", "spotify", "hotstar", "jiomart", "dmart", "1mg", "pharmeasy",
     "apollo", "bescom", "airtel", "jio", "myntra", "nykaa", "dunzo", "irctc", "redbus",
 ]
 _CATEGORY_HINTS = {
-    "groceries": ["grocer", "vegetable", "milk", "kirana", "bigbasket", "zepto", "blinkit", "instamart", "jiomart", "dmart"],
+    "groceries": ["grocer", "vegetable", "milk", "kirana", "freshkart", "bigbasket", "zepto", "blinkit", "instamart", "jiomart", "dmart"],
     "food delivery": ["food", "swiggy", "zomato", "lunch", "dinner", "meal"],
     "transport": ["cab", "uber", "ola", "rapido", "auto", "commute", "ride", "metro"],
     "subscriptions": ["subscription", "netflix", "spotify", "hotstar", "renewal"],
@@ -95,7 +95,8 @@ def heuristic_compile(text: str) -> tuple[Guardrails, list[str]]:
 
     merchants = [m for m in _KNOWN_MERCHANTS if m in t]
     categories = [c for c, hints in _CATEGORY_HINTS.items() if any(h in t for h in hints)]
-    allow_new = not any(w in t for w in ["never a new payee", "no new payee", "only these", "only from", "no new merchant", "nowhere else"])
+    allow_new = not any(w in t for w in ["never a new payee", "never pay a new", "no new payee", "no new payees",
+                                         "only these", "only from", "no new merchant", "nowhere else"])
     if not merchants and not categories:
         notes.append("no merchants or categories recognised; agent will be limited to step-up for every payment")
     step_up = None

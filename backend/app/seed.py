@@ -12,7 +12,7 @@ from .store import BaseStore, utcnow_iso
 DEMO_USER = "user_demo"
 DEMO_AGENT = "kiranabot"
 DEMO_MANDATE_ID = "mnd_demo0001"
-DEMO_MANDATE_TEXT = ("Buy my weekly groceries from FreshKart or Zepto, up to ₹2,000 per order and ₹6,000 a week. "
+DEMO_MANDATE_TEXT = ("Buy my weekly groceries from FreshKart or Zepto, up to ₹2,000 per order and ₹3,000 a week. "
                      "Never pay a new payee. Confirm with me for anything above ₹1,500.")
 
 
@@ -24,12 +24,17 @@ def seed(store: BaseStore) -> dict:
     now = datetime.now(timezone.utc)
     if not store.get("mandates", DEMO_MANDATE_ID):
         g, compiler, notes = compile_mandate(DEMO_MANDATE_TEXT)
-        # pin the demo mandate so the sandbox expectations hold regardless of compiler
-        g.per_txn_cap, g.period_cap, g.period = 2000, 6000, "week"
-        g.allowed_merchants = ["freshkart", "zepto"]
-        g.allow_new_payees = False
-        g.categories = ["groceries"]
-        g.step_up_above = 1500
+        # The compiler (heuristic or Gemini) already yields these guardrails from the text
+        # above. We reconcile against the sandbox invariants so the demo stays deterministic
+        # if a model drifts — but when the compile is correct (it is, for the heuristic path)
+        # nothing is overwritten and `compiler`/`compiler_notes` reflect the real compile.
+        invariants = {"per_txn_cap": 2000, "period_cap": 3000, "period": "week",
+                      "allowed_merchants": ["freshkart", "zepto"], "allow_new_payees": False,
+                      "categories": ["groceries"], "step_up_above": 1500}
+        for field, want in invariants.items():
+            if getattr(g, field) != want:
+                notes.append(f"demo-seed reconciliation: {field} set to {want} (compiler gave {getattr(g, field)!r})")
+                setattr(g, field, want)
         store.put("mandates", DEMO_MANDATE_ID, {
             "id": DEMO_MANDATE_ID, "user_id": DEMO_USER, "agent_id": DEMO_AGENT, "natural_language": DEMO_MANDATE_TEXT,
             "guardrails": g.model_dump(), "status": "active", "created_at": now.isoformat(),
