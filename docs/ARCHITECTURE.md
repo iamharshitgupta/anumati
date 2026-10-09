@@ -73,7 +73,7 @@ flowchart LR
 | Routers | `backend/app/routers/*` | mandates, agents, decisions/receipts, stepups, disputes, sim |
 | Sandbox | `backend/app/scenarios.py`, `routers/sim.py` | 8 mock merchant pages; naive + Gemini shopping agent |
 | Console | `web/` | Vanilla JS on Firebase Hosting; Firestore `onSnapshot` for step-ups/feed, polling fallback |
-| Eval | `eval/` | 40 synthetic cases, caps-only baseline, `RESULTS.md` |
+| Eval | `eval/` | 44 synthetic cases; policy-only (fair) + caps-only baselines; semantic marginal lift; `RESULTS.md` |
 
 ## Firestore collections
 

@@ -28,7 +28,7 @@ Suggested slide mapping onto the template's sections:
 3. **Solution** — mandate compiler → dual-check engine → graduated verdict → signed receipt → dispute attribution. (architecture.png)
 4. **Demo** — three screenshots: hidden-injection BLOCK, step-up one-tap, dispute memo.
 5. **Why it works** — deterministic + semantic; agent-declared fields untrusted; receipts verifiable offline; fail-safe fallbacks.
-6. **Results** — eval table (Anumati vs caps-only), latency, 8/8 sandbox scenarios.
+6. **Results** — eval table (Anumati vs policy-only vs caps-only), the semantic layer's marginal lift (content-steering attacks no rule catches), 0% false flags incl. hard negatives, latency, 8/8 sandbox scenarios.
 7. **Google Cloud** — service-by-service mapping (table in README).
 8. **Market & go-to-market** — issuers/PSPs onboarding agents under UAP; agent providers needing a predictable contract; ombudsman evidence standard.
 9. **Roadmap** — real AP2 VDC/UAP credential verification, I4C/FRI feeds, Cloud KMS signing, issuer tuning console, agent SDK.

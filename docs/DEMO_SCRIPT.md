@@ -11,7 +11,7 @@ Target: 2:50. Record the console at 1440×900, API on Cloud Run with Gemini enab
 | 1:35–1:55 | *Review-text injection* · Run → **Step-ups** tab · Decline | "A poisoned review says 12 jars of ghee are mandatory. Borderline, so Anumati holds it and asks the human — one tap, with the reasons. Declined." |
 | 1:55–2:15 | **Receipts** · open the block receipt · Verify chain | "Every verdict is a signed, hash-chained receipt: what the mandate said, what the agent attempted, every finding and its evidence. Anyone can verify it offline." |
 | 2:15–2:40 | **Disputes** · raise as *merchant* · Replay | "The merchant disputes. Anumati replays the receipt and drafts the attribution: content provider, high confidence, injected instruction as evidence. The analyst closes the case." |
-| 2:40–2:50 | `eval/RESULTS.md` table | "On 40 synthetic cases, caps alone catch 12% of attacks; Anumati flags 100% with zero false flags on clean orders. Firebase, Firestore, Cloud Run, Gemini — one gateway call for any agent on UPI." |
+| 2:40–2:50 | `eval/RESULTS.md` table | "On 44 synthetic cases Anumati lands the right verdict every time — zero false flags, even on four hard-negative orders built to trip a naive detector. Deterministic rules alone catch most attacks; the Gemini audit adds the ones no rule can see — content that steers the agent without breaking a single limit. Firebase, Firestore, Cloud Run, Gemini — one gateway call for any agent on UPI." |
 
 ## Recording checklist
 - `curl $API/healthz` shows `semantic_engine: gemini` before recording.

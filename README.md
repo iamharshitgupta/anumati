@@ -17,7 +17,7 @@ AI Builder Cup 2026 · BFSI: Intelligent Risk, Fraud & Financial Experiences
 | **Signed Decision Receipts** | Canonical JSON → SHA-256 → HMAC, hash-chained per mandate, verifiable offline; plain-language memo and AP2-style liability hints |
 | **Dispute workbench** | Replays the receipt; Gemini drafts a neutral attribution across user / agent provider / merchant / issuer; a human closes the case |
 | **Red-team sandbox** | Eight mock merchant pages (clean + seven attacks) and a steerable shopping agent, so judges watch the attack and the catch live |
-| **Evaluation** | 40 synthetic cases vs. a caps-only baseline — see [`eval/RESULTS.md`](eval/RESULTS.md) |
+| **Evaluation** | 44 synthetic cases (25 attack / 19 benign, incl. hard negatives) vs. a *fair* deterministic-policy baseline **and** a caps-only baseline, with the semantic layer's marginal lift isolated — see [`eval/RESULTS.md`](eval/RESULTS.md) |
 
 ## Google Cloud services
 

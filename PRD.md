@@ -39,7 +39,7 @@ The liability framework for UAP has not been published. Anumati is a working pro
 - G3. Return a graduated verdict — APPROVE / STEP_UP / BLOCK — in well under a second.
 - G4. Issue a signed, hash-chained Decision Receipt for every verdict, verifiable offline.
 - G5. Provide a dispute workbench that replays a receipt and drafts an AP2-style liability attribution.
-- G6. Ship a red-team sandbox and a synthetic attack suite with a caps-only baseline, so the control's value is measured, not asserted.
+- G6. Ship a red-team sandbox and a synthetic attack suite with a *fair* deterministic-policy baseline and a caps-only baseline, so the semantic layer's marginal value is measured, not asserted.
 
 **Non-goals (v0)**
 - Not a UPI PSP, not a wallet, no real money movement. The rail is simulated.
@@ -86,7 +86,7 @@ The liability framework for UAP has not been published. Anumati is a working pro
 
 ### 5.7 Sandbox & evaluation
 - FR-15 `/sim/merchant/{scenario}` serves eight mock pages (clean + seven attacks); `/sim/run` drives a naive or Gemini-driven agent through the gateway.
-- FR-16 `eval/run_eval.py` runs 40 synthetic cases (25 attack / 15 benign) against Anumati and a caps-only baseline and writes `RESULTS.md`.
+- FR-16 `eval/run_eval.py` runs 44 synthetic cases (25 attack / 19 benign, including hard negatives that look risky but must not be flagged) against Anumati, a fair deterministic-policy-only baseline, and a caps-only baseline, isolates the semantic layer's marginal lift, and writes `RESULTS.md`.
 
 ## 6. Non-functional requirements
 - **Explainability:** every verdict decomposes into named findings with evidence; no opaque score.
@@ -108,7 +108,7 @@ The liability framework for UAP has not been published. Anumati is a working pro
 
 ## 8. Success metrics (hackathon)
 - Sandbox: 8/8 scenarios land on the expected verdict live.
-- Eval: attack catch rate ≥ 95%, benign false-flag rate ≤ 5%, versus caps-only baseline; results committed.
+- Eval: attack catch rate ≥ 95%, benign false-flag rate ≤ 5% (including hard negatives), versus both the policy-only and caps-only baselines; results committed (heuristic run as a regression bound, Gemini run as the independent number).
 - Receipt chain verifies; a tampered receipt fails verification on stage.
 - Demo video ≤ 3 minutes covering: mandate → clean approve → injected page block → step-up decline → dispute replay.
 
