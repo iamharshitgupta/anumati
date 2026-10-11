@@ -173,7 +173,7 @@ async function verifyCurrentReceipt(quiet) {
 }
 $("#verifyReceiptBtn").addEventListener("click", () => verifyCurrentReceipt(false));
 $("#resetReceiptBtn").addEventListener("click", () => { if (openReceiptJson) { $("#receiptView").value = JSON.stringify(openReceiptJson, null, 2); verifyCurrentReceipt(false); } });
-$("#tamperBtn").addEventListener("click", () => {
+function tamperReceiptAmount() {
   let r; try { r = JSON.parse($("#receiptView").value); } catch { return; }
   const before = r.attempted?.amount;
   if (r.attempted && typeof r.attempted.amount === "number") r.attempted.amount = r.attempted.amount + 1000;
@@ -181,7 +181,8 @@ $("#tamperBtn").addEventListener("click", () => {
   $("#receiptView").value = JSON.stringify(r, null, 2);
   $("#verifyResult").innerHTML = `<div class="warn">Changed <code>attempted.amount</code> from ₹${before} to ₹${r.attempted.amount} — a single rupee-field edit. Now re-verifying…</div>`;
   setTimeout(() => verifyCurrentReceipt(false), 400);
-});
+}
+$("#tamperBtn").addEventListener("click", tamperReceiptAmount);
 $("#chainBtn").addEventListener("click", async () => { const c = await api(`/v1/receipts/chain/${$("#sandboxMandate").value || "mnd_demo0001"}`); $("#chainResult").textContent = `${c.receipts} receipts · chain ${c.chain_intact ? "intact ✅" : "BROKEN at " + c.broken_at + " ❌"}`; });
 
 $("#disputeBtn").addEventListener("click", async () => {
@@ -235,5 +236,93 @@ async function realtime() {
     $("#rtBadge").textContent = "realtime: Firestore"; $("#rtBadge").className = "badge ok";
   } catch (e) { console.warn("Firestore realtime unavailable, polling", e); setInterval(() => { loadStepups().catch(() => {}); }, 4000); }
 }
+
+// ---------------------------------------------------------------- guided demo walkthrough
+// Drives the *real* console through the canonical story (PRD §4/§8):
+// mandate → clean approve → injected block → step-up decline → dispute → tamper-proof receipt.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function demoHighlight(sel) {
+  document.querySelectorAll(".demo-highlight").forEach((e) => e.classList.remove("demo-highlight"));
+  const el = sel && (typeof sel === "string" ? $(sel) : sel);
+  if (el) { el.classList.add("demo-highlight"); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+}
+async function demoRunScenario(key) {
+  scenario = key; renderScenarios(); await showMerchant();
+  lastRun = await api("/sim/run", { method: "POST", body: { mandate_id: $("#sandboxMandate").value, scenario: key, mode: "naive" } });
+  renderResult(lastRun); refresh("feed");
+  return lastRun.decisions[lastRun.decisions.length - 1];
+}
+
+const demo = { steps: [], i: -1, playing: false, timer: null, ctx: {} };
+
+function buildDemoSteps() {
+  const ctx = demo.ctx = {};
+  return [
+    { hold: 5500, cap: "<b>1 · The mandate.</b> The human delegated to an agent in one sentence; Gemini compiled it into signed guardrails — ₹2,000/order, ₹3,000/week, FreshKart or Zepto only, no new payees, confirm above ₹1,500. A valid mandate proves <i>authorisation</i>, not <i>faithfulness</i>.",
+      act: async () => { switchTab("mandates"); await loadMandates(); demoHighlight("#mandateList .item"); } },
+    { hold: 5500, cap: "<b>2 · Clean run → APPROVE.</b> The agent does the weekly grocery run at a mandated merchant, to the verified payee. Anumati clears it to the rail in a millisecond and issues a signed receipt.",
+      act: async () => { switchTab("sandbox"); await demoRunScenario("clean"); demoHighlight("#result"); } },
+    { hold: 7000, cap: "<b>3 · Hidden-text redirect → BLOCK.</b> An invisible &lt;div&gt; tells the agent the UPI id 'migrated' to a mule VPA. The mandate is still valid and the agent still authenticated — but Anumati BLOCKs: payee not verified for the merchant, suspect-registry hit, and the injected text captured verbatim as evidence.",
+      act: async () => { const d = await demoRunScenario("hidden_injection"); ctx.blockedDecisionId = d.id; ctx.blockedReceiptId = d.receipt_id; demoHighlight("#result"); } },
+    { hold: 7000, cap: "<b>4 · Review injection → STEP_UP → declined.</b> A poisoned 'review' insists the agent add 12 jars of ghee. No hard rule is broken, so Anumati holds it rather than guessing — the account holder gets a one-tap prompt and declines.",
+      act: async () => {
+        const d = await demoRunScenario("review_upsell_injection"); ctx.stepupId = d.stepup_id;
+        await sleep(1400); switchTab("stepups"); await loadStepups(); demoHighlight("#stepupList .item");
+        await sleep(1800);
+        if (ctx.stepupId) { await api(`/v1/stepups/${ctx.stepupId}/respond`, { method: "POST", body: { approve: false, note: "declined by account holder" } }); await loadStepups(); refresh("feed"); }
+      } },
+    { hold: 7000, cap: "<b>5 · Dispute → liability attribution.</b> Later a dispute is raised on the blocked payment. Anumati replays the signed receipt and drafts a neutral attribution across user / agent / merchant / issuer — here the merchant/content provider, with the injected text as evidence. A human closes the case.",
+      act: async () => {
+        switchTab("disputes");
+        $("#dDecision").value = ctx.blockedDecisionId || "";
+        $("#dClaim").value = "I never authorised this payee. My mandate said FreshKart only.";
+        if (ctx.blockedDecisionId) { const dsp = await api("/v1/disputes", { method: "POST", body: { decision_id: ctx.blockedDecisionId, raised_by: "user", claim: $("#dClaim").value } }); renderDispute(dsp); }
+        demoHighlight("#disputeView");
+      } },
+    { hold: 8000, cap: "<b>6 · Tamper-proof evidence.</b> Every verdict is a signed, hash-chained receipt — the artifact a dispute is settled on. Watch: change a single rupee and the HMAC breaks. It verifies offline, in any language, without trusting the gateway.",
+      act: async () => {
+        switchTab("receipts"); await loadReceipts();
+        if (ctx.blockedReceiptId) { await openReceipt(ctx.blockedReceiptId); demoHighlight("#receiptView"); await sleep(2200); tamperReceiptAmount(); }
+      } },
+    { hold: 99999, cap: "<b>✓ That's Anumati.</b> mandate → approve → block → step-up → dispute → tamper-proof evidence. A deterministic policy engine fused with a Gemini semantic audit, with a signed receipt for every decision — the trust and liability layer for agentic UPI payments. <i>Press Replay to run it again.</i>",
+      act: async () => { demoHighlight(null); $("#demoNext").textContent = "↻ Replay"; } },
+  ];
+}
+function demoShowCaption() {
+  const s = demo.steps[demo.i];
+  $("#demoCaption").innerHTML = s.cap;
+  $("#demoStep").textContent = `${demo.i + 1}/${demo.steps.length}`;
+  $("#demoProgress").textContent = demo.steps.map((_, k) => (k <= demo.i ? "●" : "○")).join("");
+}
+async function demoGo(i) {
+  if (demo.busy) return;            // ignore clicks/timers while a step is running (prevents overlap)
+  demo.busy = true;
+  clearTimeout(demo.timer);
+  if (i >= demo.steps.length) i = demo.steps.length - 1;
+  demo.i = i;
+  if (demo.i < demo.steps.length - 1) $("#demoNext").textContent = "Next ›";
+  $("#demoNext").disabled = true;
+  demoShowCaption();
+  try { await demo.steps[demo.i].act(); }
+  catch (e) { $("#demoCaption").innerHTML += ` <span class="demo-err">— ${esc(e.message)}</span>`; }
+  demo.busy = false;
+  $("#demoNext").disabled = false;
+  if (demo.playing && demo.i < demo.steps.length - 1) demo.timer = setTimeout(() => demoGo(demo.i + 1), demo.steps[demo.i].hold);
+}
+function demoStart() {
+  demo.steps = buildDemoSteps(); demo.playing = true; demo.busy = false; demo.i = -1;
+  $("#demoBar").hidden = false; $("#guidedBtn").classList.add("running");
+  $("#demoPlay").textContent = "⏸ Pause"; $("#demoNext").disabled = false;
+  demoGo(0);
+}
+function demoExit() { clearTimeout(demo.timer); demo.playing = false; demo.busy = false; demo.i = -1; $("#demoBar").hidden = true; $("#guidedBtn").classList.remove("running"); demoHighlight(null); }
+$("#guidedBtn").addEventListener("click", () => (demo.i === -1 ? demoStart() : demoExit()));
+$("#demoStop").addEventListener("click", demoExit);
+$("#demoNext").addEventListener("click", () => { if (demo.i >= demo.steps.length - 1) { demoGo(0); } else { demoGo(demo.i + 1); } });
+$("#demoPlay").addEventListener("click", () => {
+  demo.playing = !demo.playing; $("#demoPlay").textContent = demo.playing ? "⏸ Pause" : "▶ Play";
+  if (demo.playing && demo.i < demo.steps.length - 1) demo.timer = setTimeout(() => demoGo(demo.i + 1), 1200);
+  else clearTimeout(demo.timer);
+});
 
 boot().then(realtime);

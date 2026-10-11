@@ -4,6 +4,33 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.3.0] — One-click guided demo walkthrough
+
+- **New "▶ Guided demo" button** in the console header. It drives the *real*
+  console through the canonical story end to end (PRD §4/§8), narrating each beat
+  in a bottom bar and highlighting the live card:
+  1. **The mandate** — authorisation vs faithfulness.
+  2. **Clean run → APPROVE** (verified payee, receipt issued).
+  3. **Hidden-text redirect → BLOCK** (unverified payee + suspect registry +
+     injected text captured verbatim).
+  4. **Review injection → STEP_UP → declined** in one tap.
+  5. **Dispute → liability attribution** (replays the signed receipt; lands on
+     merchant/content provider).
+  6. **Tamper-proof evidence** — auto-tampers the blocked receipt and the HMAC
+     breaks on screen.
+  7. **Recap.**
+- Auto-plays with **Pause / Next / Exit / Replay** controls and a progress
+  indicator. Each step chains the next by capturing real decision / receipt /
+  step-up ids returned by the API — nothing is faked.
+- Driver is **re-entrancy-guarded**: a step in flight ignores further
+  advance clicks and disables Next, so fast clicking or clashing with auto-play
+  can't fire overlapping API calls (the cause of a transient dispute-step 404
+  during development).
+- Refactored the receipt tamper action into a reusable `tamperReceiptAmount()`
+  so the walkthrough and the manual button share one code path.
+- `DEMO_SCRIPT.md` notes the one-click walkthrough as the fastest way to show
+  the full story; README quick-start points to the button.
+
 ## [0.2.1] — Theme & rubric alignment
 
 - Added `docs/THEME_ALIGNMENT.md`: validates Anumati against the AI Builder Cup
