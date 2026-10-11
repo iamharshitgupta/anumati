@@ -96,6 +96,15 @@
         <pre id="attempt" class="mono"></pre>
       </div>
     </div>
+    <section class="evidence-panel" aria-live="polite">
+      <h3>Evidence chain</h3>
+      <div id="evidenceChain" class="evidence-chain"></div>
+    </section>
+    <section class="baseline-panel">
+      <h3>How other controls would decide</h3>
+      <p id="baselineNote" class="hint"></p>
+      <div id="baselineComparison"></div>
+    </section>
     <div class="row">
       <button id="openReceipt" class="secondary">Open decision receipt</button>
       <button id="raiseDispute" class="secondary">Raise a dispute on this decision</button>
@@ -135,7 +144,8 @@
 <section id="tab-stepups" class="tab">
   <div class="card">
     <h2>Pending confirmations</h2>
-    <p class="hint">When Anumati returns STEP_UP, the agent is held and the account holder gets a one-tap prompt (Firestore realtime listener; FCM push when configured). Approve or decline here.</p>
+    <p class="hint">The agent is held until the account holder approves or declines. Review the requested payment and the mandate reason before deciding.</p>
+    <div id="stepupOutcome" class="action-outcome" role="status" aria-live="polite" hidden></div>
     <div id="stepupList" class="list"></div>
   </div>
 </section>

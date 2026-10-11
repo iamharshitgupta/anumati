@@ -130,3 +130,41 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 body { padding-bottom: 0; }
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel-2); border: 1px solid var(--accent); padding: 12px 16px; border-radius: 12px; max-width: 360px; box-shadow: 0 10px 30px rgba(0,0,0,.4); z-index: 9; }
 .toast b { color: var(--accent-2); }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-heading h2 { margin: 0; }
+.walkthrough { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; margin-bottom: 16px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
+.walkthrough p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.walkthrough .hint { margin: 0; }
+.evidence-panel, .baseline-panel { grid-column: 1 / -1; padding: 14px 0; border-top: 1px solid var(--line); }
+.evidence-panel h3, .baseline-panel h3 { margin-top: 0; }
+.evidence-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.evidence-grid blockquote { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: var(--panel-2); overflow-wrap: anywhere; }
+.evidence-grid mark { display: inline; color: #21170b; background: #ffd27a; padding: 2px 3px; }
+.source-link { display: block; margin-top: 6px; padding: 0; border: 0; background: none; color: var(--accent-2); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.evidence-grid ul { padding-left: 20px; overflow-wrap: anywhere; }
+.comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.comparison-table th, .comparison-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.comparison-table th { color: var(--muted); font-weight: 500; }
+.stepup-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 16px; border: 1px solid var(--warn); border-radius: 8px; background: var(--panel-2); }
+.stepup-summary { min-width: 0; flex: 1; }
+.stepup-summary h3 { color: var(--text); font-size: 18px; text-transform: none; letter-spacing: 0; margin: 12px 0 0; }
+.stepup-summary p { margin: 10px 0 4px; }
+.mono-inline { font-family: var(--mono); overflow-wrap: anywhere; }
+.cart-lines { margin: 4px 0; padding-left: 20px; color: var(--muted); font-size: 13px; }
+.decision-buttons { display: flex; gap: 8px; align-self: center; }
+.decision-buttons button { min-width: 130px; min-height: 42px; }
+.decision-buttons .secondary { border-color: var(--bad); color: #ff9ca5; }
+.action-outcome { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.action-outcome.success { border-color: var(--ok); color: var(--ok); }
+.action-outcome.failure { border-color: var(--bad); color: #ff9ca5; }
+.receipt-actions { margin-bottom: 8px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .walkthrough, .stepup-card { align-items: stretch; flex-direction: column; }
+  .evidence-grid { grid-template-columns: 1fr; gap: 8px; }
+  .decision-buttons { width: 100%; }
+  .decision-buttons button { flex: 1; min-width: 0; }
+  .comparison-table { font-size: 12px; }
+  .comparison-table th, .comparison-table td { padding: 7px 5px; }
+  .section-heading { align-items: flex-start; flex-direction: column; }
+}
