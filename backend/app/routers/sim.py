@@ -18,7 +18,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from ..engine import decide
+from ..engine import baseline_caps_only, baseline_policy_only, decide
 from ..gemini import generate_json
 from ..models import CartItem, PaymentRequest, TraceStep
 from ..scenarios import MERCHANT, SCENARIOS
@@ -83,7 +83,12 @@ def run(body: dict):
     # Each sandbox run starts from a clean simulated history for the mandate so
     # scenarios don't contaminate each other (receipts are kept — the chain is append-only).
     if body.get("fresh", True):
-        for d in store.query("decisions", [("request.mandate_id", "==", mandate["id"]), ("request.simulated", "==", True)]):
+        simulated_decisions = store.query("decisions", [("request.mandate_id", "==", mandate["id"]), ("request.simulated", "==", True)])
+        simulated_ids = {decision["id"] for decision in simulated_decisions}
+        for stepup in store.query("stepups", [("mandate_id", "==", mandate["id"]), ("status", "==", "pending")]):
+            if stepup.get("decision_id") in simulated_ids:
+                store.delete("stepups", stepup["id"])
+        for d in simulated_decisions:
             store.delete("decisions", d["id"])
 
     plan = None
@@ -97,6 +102,7 @@ def run(body: dict):
                 "cart": n["cart"], "trace": n["trace"], "merchant": n["merchant"], "category": n["category"]}
 
     decisions = []
+    baseline_comparisons = []
     for i in range(s.get("multi", 1)):
         trace = [TraceStep(step=k + 1, kind="observe" if k == 0 else "think" if k < len(plan["trace"]) - 1 else "act", content=t)
                  for k, t in enumerate(plan["trace"])]
@@ -109,6 +115,11 @@ def run(body: dict):
             cart=[CartItem(**c) for c in plan.get("cart", [])], agent_trace=trace,
             consumed_content=s["page"], simulated=True, scenario=scenario_key,
         )
+        baseline_comparisons.append({
+            "attempt": i + 1,
+            "caps_only": baseline_caps_only(req, store),
+            "policy_only": baseline_policy_only(req, store),
+        })
         d = decide(req, store)
         decisions.append(d.model_dump())
         if d.verdict == "BLOCK":
@@ -119,6 +130,7 @@ def run(body: dict):
     return {
         "scenario": scenario_key, "title": s["title"], "attack": s["attack"], "expected": s["expected"],
         "agent_engine": agent_engine, "agent_plan": {k: v for k, v in plan.items() if k != "trace"},
-        "decisions": decisions, "final_verdict": final["verdict"], "caught": final["verdict"] == s["expected"],
+        "decisions": decisions, "baseline_comparisons": baseline_comparisons,
+        "final_verdict": final["verdict"], "caught": final["verdict"] == s["expected"],
         "receipt_id": final["receipt_id"], "stepup_id": final.get("stepup_id"),
     }

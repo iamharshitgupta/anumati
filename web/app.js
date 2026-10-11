@@ -8,7 +8,7 @@ const inr = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDi
 
 // ---------------------------------------------------------------- API base
 const stored = localStorage.getItem("anumati.api");
-let API = stored ?? (window.ANUMATI_API_BASE || (location.hostname === "localhost" || location.protocol === "file:" ? "http://localhost:8080" : ""));
+let API = stored ?? (window.ANUMATI_API_BASE || (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:" ? "http://localhost:8080" : ""));
 $("#apiBase").value = API;
 $("#apiBase").addEventListener("change", (e) => { API = e.target.value.replace(/\/$/, ""); localStorage.setItem("anumati.api", API); boot(); });
 
@@ -28,7 +28,14 @@ document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("
 
 // ---------------------------------------------------------------- state
 let scenarios = [], scenario = "clean", mandates = [], lastRun = null;
+let walkthroughStep = -1;
+let openedReceiptId = null;
 const DEMO_USER = "user_demo";
+const WALKTHROUGH = [
+  { scenario: "clean", title: "A normal payment", reason: "The verified payee and basket fit the active mandate." },
+  { scenario: "hidden_injection", title: "A page tries to redirect payment", reason: "The new payee and page instruction do not match the merchant in the mandate." },
+  { scenario: "review_upsell_injection", title: "A human reviews a borderline basket", reason: "The page steers the agent to add an unusual quantity, so Anumati pauses for confirmation." },
+];
 
 async function boot() {
   try {
@@ -57,14 +64,17 @@ async function showMerchant() {
   $("#merchantView").textContent = visible.trim();
   $("#hiddenPre").textContent = hidden || "(nothing hidden — the steering, if any, is in plain sight)";
 }
-$("#runBtn").addEventListener("click", async () => {
+async function runScenario() {
   const btn = $("#runBtn"); btn.disabled = true; btn.textContent = "Agent is shopping…";
   try {
     lastRun = await api("/sim/run", { method: "POST", body: { mandate_id: $("#sandboxMandate").value, scenario, mode: $("#agentMode").value } });
     renderResult(lastRun); refresh("stepups"); refresh("feed");
   } catch (e) { toast(`<b>Run failed</b><br>${esc(e.message)}`); }
   btn.disabled = false; btn.textContent = "Run attack through Anumati →";
-});
+  renderWalkthrough();
+}
+$("#runBtn").addEventListener("click", runScenario);
+$("#startWalkthrough").addEventListener("click", startWalkthrough);
 function renderResult(r) {
   const d = r.decisions[r.decisions.length - 1];
   $("#result").hidden = false;
@@ -80,10 +90,105 @@ function renderResult(r) {
   $("#trace").innerHTML = d.request.agent_trace.map((t) => `<li><span class="k">${t.kind}</span>${esc(t.content)}</li>`).join("");
   $("#attempt").textContent = JSON.stringify({ payee: `${d.request.payee_name} <${d.request.payee_vpa}>`, merchant: d.request.merchant, amount: inr(d.request.amount), category: d.request.category, cart: d.request.cart.map((c) => `${c.qty}× ${c.name} @ ${inr(c.unit_price)}`) }, null, 2);
   $("#stepupNote").textContent = d.verdict === "STEP_UP" ? "Held — the account holder's prompt is waiting in the Step-ups tab." : d.verdict === "BLOCK" ? "Blocked before any UPI collect/pay was created." : "Cleared to the rail.";
+  renderEvidence(d);
+  renderBaselineComparison(r, d);
   $("#openReceipt").onclick = () => { switchTab("receipts"); openReceipt(d.receipt_id); };
   $("#raiseDispute").onclick = () => { switchTab("disputes"); $("#dDecision").value = d.id; };
+  renderWalkthrough();
 }
 function switchTab(name) { document.querySelector(`nav.tabs button[data-tab=${name}]`).click(); }
+
+function renderEvidence(decision) {
+  const findings = decision.findings.filter((f) => ["INJECTION", "DRIFT"].includes(f.code));
+  const effects = [];
+  if (decision.findings.some((f) => ["PAYEE_NOT_ALLOWED", "PAYEE_HANDLE_MISMATCH", "NEW_PAYEE", "PAYEE_SUSPECT_REGISTRY"].includes(f.code))) {
+    effects.push(`Payee submitted: ${decision.request.payee_vpa}`);
+  }
+  if (decision.findings.some((f) => ["QUANTITY_ANOMALY", "CART_AMOUNT_MISMATCH", "CART_CATEGORY_OUT_OF_SCOPE", "CATEGORY_OUT_OF_SCOPE"].includes(f.code))) {
+    effects.push(`Cart / amount: ${decision.request.cart.map((item) => `${item.qty}× ${item.name}`).join(", ") || inr(decision.request.amount)}`);
+  }
+  if (!findings.length && !effects.length) {
+    $("#evidenceChain").innerHTML = `<p class="hint">No injection or intent drift was detected for this request.</p>`;
+    return;
+  }
+  const sourceQuotes = [];
+  const quoteItems = findings.flatMap((finding) => {
+    const quotes = finding.evidence?.instructions || finding.evidence?.reasons || [];
+    const clearestQuote = [...quotes].sort((left, right) => right.length - left.length)[0];
+    if (!clearestQuote) return [];
+    const sourceLink = finding.code === "INJECTION"
+      ? `<button class="source-link" type="button" data-source-quote="${sourceQuotes.push(clearestQuote) - 1}">Locate in merchant content</button>`
+      : "";
+    return [`<blockquote><span class="tag">${esc(finding.code)}</span><mark>${esc(clearestQuote)}</mark>${sourceLink}</blockquote>`];
+  });
+  $("#evidenceChain").innerHTML = `
+    <div class="evidence-grid">
+      <div><b>Page / agent evidence</b>${quoteItems.join("") || `<p class="hint">The trace shows the agent followed content from the merchant page.</p>`}</div>
+      <div><b>Payment fields affected</b>${effects.length ? `<ul>${effects.map((effect) => `<li>${esc(effect)}</li>`).join("")}</ul>` : `<p class="hint">No changed payee or cart field was identified.</p>`}</div>
+    </div>
+    <p class="hint">Quoted content is untrusted evidence and is displayed as text only.</p>`;
+  document.querySelectorAll("[data-source-quote]").forEach((button) => {
+    button.onclick = () => highlightSourceQuote(sourceQuotes[Number(button.dataset.sourceQuote)]);
+  });
+}
+
+function highlightSourceQuote(quote) {
+  for (const target of [$("#hiddenPre"), $("#merchantView")]) {
+    const content = target.textContent || "";
+    const pattern = quote.trim().split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
+    const match = new RegExp(pattern).exec(content);
+    if (!match) continue;
+    const mark = document.createElement("mark");
+    mark.textContent = match[0];
+    target.replaceChildren(document.createTextNode(content.slice(0, match.index)), mark, document.createTextNode(content.slice(match.index + match[0].length)));
+    if (target.id === "hiddenPre") $("#hiddenView").open = true;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  toast("Exact quote is not present in the displayed page excerpt.");
+}
+
+function renderBaselineComparison(run, decision) {
+  const comparison = run.baseline_comparisons?.[run.baseline_comparisons.length - 1];
+  $("#baselineNote").textContent = comparison
+    ? `Same simulated request · deterministic baselines · semantic engine: ${decision.semantic_engine}.`
+    : "Baseline comparison is unavailable for this response.";
+  $("#baselineComparison").innerHTML = comparison ? `
+    <table class="comparison-table"><thead><tr><th>Control</th><th>Verdict</th><th>What it checks</th></tr></thead><tbody>
+      <tr><td>Caps-only</td><td><span class="tag ${comparison.caps_only}">${comparison.caps_only}</span></td><td>Mandate and per-payment amount cap</td></tr>
+      <tr><td>Policy-only</td><td><span class="tag ${comparison.policy_only}">${comparison.policy_only}</span></td><td>Deterministic rules, without semantic audit</td></tr>
+      <tr><td>Anumati</td><td><span class="tag ${decision.verdict}">${decision.verdict}</span></td><td>Policy plus page-content and intent-drift audit</td></tr>
+    </tbody></table>` : "";
+}
+
+function renderWalkthrough() {
+  const panel = $("#walkthrough");
+  if (walkthroughStep < 0) { panel.hidden = true; return; }
+  panel.hidden = false;
+  if (walkthroughStep >= WALKTHROUGH.length) {
+    panel.innerHTML = `<b>Guided demo complete</b><p>You saw a normal approval, a redirected-payee block, and a payment held for human confirmation.</p><button id="restartWalkthrough" class="secondary" type="button">Run it again</button>`;
+    $("#restartWalkthrough").onclick = startWalkthrough;
+    return;
+  }
+  const step = WALKTHROUGH[walkthroughStep];
+  const hasResult = lastRun?.scenario === step.scenario;
+  panel.innerHTML = `<div><strong>Guided demo · ${walkthroughStep + 1} of ${WALKTHROUGH.length}</strong><p>${esc(step.title)}. ${esc(step.reason)}</p></div>
+    ${hasResult ? `<button id="walkthroughNext" class="secondary" type="button">${walkthroughStep === 2 ? "Review step-up" : "Next step"}</button>` : `<span class="hint">Run this step to continue.</span>`}`;
+  const next = $("#walkthroughNext");
+  if (next) next.onclick = () => {
+    if (walkthroughStep === 2) { switchTab("stepups"); return; }
+    walkthroughStep += 1;
+    scenario = WALKTHROUGH[walkthroughStep].scenario;
+    renderScenarios(); showMerchant(); renderWalkthrough();
+  };
+}
+
+function startWalkthrough() {
+  walkthroughStep = 0;
+  lastRun = null;
+  scenario = WALKTHROUGH[0].scenario;
+  renderScenarios(); showMerchant(); renderWalkthrough();
+}
 
 // ---------------------------------------------------------------- mandates
 async function loadMandates() {
@@ -117,15 +222,46 @@ $("#signBtn").addEventListener("click", async () => {
 async function loadStepups(rows) {
   rows = rows || await api(`/v1/stepups?user_id=${DEMO_USER}&status=pending`);
   $("#suCount").textContent = rows.length;
-  $("#stepupList").innerHTML = rows.length ? rows.map((s) => `
-    <div class="item"><div><b>${inr(s.amount)}</b> to ${esc(s.payee_name)} <span class="meta">&lt;${esc(s.payee_vpa)}&gt;</span> · risk ${s.risk_score}/100
-      <ul class="notes">${(s.reasons || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
-      <div class="meta">${s.id} · agent ${s.agent_id} · ${new Date(s.created_at).toLocaleTimeString()}</div></div>
-      <div class="actions"><button class="primary tiny" data-su="${s.id}" data-ok="1">Approve</button><button class="secondary tiny" data-su="${s.id}" data-ok="0">Decline</button></div></div>`).join("")
-    : `<p class="hint">Nothing pending.</p>`;
+  const enriched = await Promise.all(rows.map(async (stepup) => {
+    try {
+      const [decision, mandate] = await Promise.all([
+        api(`/v1/decisions/${stepup.decision_id}`), api(`/v1/mandates/${stepup.mandate_id}`),
+      ]);
+      return { stepup, decision, mandate };
+    } catch { return { stepup, decision: null, mandate: null }; }
+  }));
+  $("#stepupList").innerHTML = enriched.length ? enriched.map(({ stepup, decision, mandate }) => {
+    const guardrails = mandate?.guardrails || {};
+    const rule = guardrails.step_up_above && stepup.amount > guardrails.step_up_above
+      ? `Confirmation required above ${inr(guardrails.step_up_above)}.`
+      : `Review required by the active mandate and risk findings.`;
+    const cart = decision?.request?.cart || [];
+    return `
+      <article class="stepup-card">
+        <div class="stepup-summary"><div><span class="tag pending">PENDING · STEP_UP</span> <span class="tag">risk ${stepup.risk_score}/100</span></div>
+          <h3>${inr(stepup.amount)} to ${esc(stepup.payee_name)}</h3><p class="mono-inline">${esc(stepup.payee_vpa)}</p>
+          <p><b>Mandate rule</b><br>${esc(rule)} ${esc(mandate?.natural_language || "")}</p>
+          <p><b>Why it was paused</b></p><ul class="notes">${(stepup.reasons || []).map((reason) => `<li>${esc(reason)}</li>`).join("")}</ul>
+          ${cart.length ? `<p><b>Requested basket</b></p><ul class="cart-lines">${cart.map((item) => `<li>${item.qty}× ${esc(item.name)} · ${inr(item.unit_price)} each</li>`).join("")}</ul>` : ""}
+          <div class="meta">${stepup.id} · agent ${esc(stepup.agent_id)} · ${new Date(stepup.created_at).toLocaleTimeString()}</div>
+        </div>
+        <div class="decision-buttons"><button class="primary" data-su="${stepup.id}" data-ok="1">Approve payment</button><button class="secondary" data-su="${stepup.id}" data-ok="0">Decline payment</button></div>
+      </article>`;
+  }).join("") : `<p class="hint">Nothing pending. Any new borderline payment will appear here for review.</p>`;
   document.querySelectorAll("[data-su]").forEach((b) => b.onclick = async () => {
-    await api(`/v1/stepups/${b.dataset.su}/respond`, { method: "POST", body: { approve: b.dataset.ok === "1", note: b.dataset.ok === "1" ? "confirmed by account holder" : "declined by account holder" } });
-    loadStepups(); refresh("feed");
+    const approve = b.dataset.ok === "1";
+    document.querySelectorAll(`[data-su="${b.dataset.su}"]`).forEach((button) => { button.disabled = true; });
+    try {
+      const result = await api(`/v1/stepups/${b.dataset.su}/respond`, { method: "POST", body: { approve, note: approve ? "confirmed by account holder" : "declined by account holder" } });
+      $("#stepupOutcome").hidden = false;
+      $("#stepupOutcome").textContent = `Payment ${result.status}. The decision and receipt now record the account holder's response.`;
+      await loadStepups(); refresh("feed");
+      if (!approve && walkthroughStep === 2) { walkthroughStep = WALKTHROUGH.length; switchTab("sandbox"); renderWalkthrough(); }
+    } catch (error) {
+      $("#stepupOutcome").hidden = false;
+      $("#stepupOutcome").textContent = `Could not record the response: ${error.message}`;
+      document.querySelectorAll(`[data-su="${b.dataset.su}"]`).forEach((button) => { button.disabled = false; });
+    }
   });
 }
 
@@ -148,7 +284,43 @@ async function loadReceipts() {
       <div class="actions"><button class="secondary tiny" data-open="${r.id}">Open</button></div></div>`).join("");
   document.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openReceipt(b.dataset.open));
 }
-async function openReceipt(id) { const r = await api(`/v1/receipts/${id}`); $("#receiptView").textContent = JSON.stringify(r, null, 2); }
+async function openReceipt(id) {
+  const response = await fetch(`${API}/v1/receipts/${id}`);
+  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+  const rawReceipt = await response.text();
+  const receipt = JSON.parse(rawReceipt);
+  openedReceiptId = id;
+  $("#receiptView").textContent = JSON.stringify(receipt, null, 2);
+  $("#verifyReceiptInput").value = rawReceipt;
+  $("#reloadReceiptBtn").disabled = false;
+  showReceiptVerification(receipt.signature_valid, "Loaded receipt signature");
+}
+function showReceiptVerification(valid, label) {
+  const result = $("#receiptVerifyResult");
+  result.hidden = false;
+  result.className = `action-outcome ${valid ? "success" : "failure"}`;
+  result.textContent = `${label}: ${valid ? "VALID" : "INVALID"}${valid ? " — receipt data matches its signature." : " — receipt data does not match its signature."}`;
+}
+async function verifyReceipt() {
+  try {
+    const payload = $("#verifyReceiptInput").value.trim();
+    const receipt = JSON.parse(payload);
+    if (!receipt || Array.isArray(receipt) || typeof receipt !== "object") throw new Error("Receipt must be a JSON object.");
+    const response = await fetch(`${API}/v1/receipts/verify`, { method: "POST", headers: { "content-type": "application/json" }, body: payload });
+    if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+    const result = await response.json();
+    showReceiptVerification(result.valid, "Signature verification");
+  } catch (error) {
+    const result = $("#receiptVerifyResult");
+    result.hidden = false;
+    result.className = "action-outcome failure";
+    result.textContent = `Could not verify receipt: ${error.message}`;
+  }
+}
+$("#verifyReceiptBtn").addEventListener("click", verifyReceipt);
+$("#reloadReceiptBtn").addEventListener("click", () => {
+  if (openedReceiptId) openReceipt(openedReceiptId).catch((error) => toast(`<b>Could not reload receipt</b><br>${esc(error.message)}`));
+});
 $("#chainBtn").addEventListener("click", async () => { const c = await api(`/v1/receipts/chain/${$("#sandboxMandate").value || "mnd_demo0001"}`); $("#chainResult").textContent = `${c.receipts} receipts · chain ${c.chain_intact ? "intact ✅" : "BROKEN at " + c.broken_at + " ❌"}`; });
 
 $("#disputeBtn").addEventListener("click", async () => {

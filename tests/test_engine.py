@@ -52,6 +52,22 @@ def test_sandbox_scenarios(client, scenario, expected):
     assert r.json()["final_verdict"] == expected
 
 
+def test_sandbox_reports_same_request_baseline_comparison(client):
+    r = client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "review_upsell_injection"})
+    assert r.status_code == 200, r.text
+    result = r.json()
+    assert result["final_verdict"] == "STEP_UP"
+    assert result["baseline_comparisons"] == [{"attempt": 1, "caps_only": "APPROVE", "policy_only": "APPROVE"}]
+
+
+def test_fresh_sandbox_run_clears_stale_simulated_stepups(client):
+    first = client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "price_inflation"}).json()
+    assert first["stepup_id"]
+    assert len(client.get("/v1/stepups?user_id=user_demo&status=pending").json()) == 1
+    client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
+    assert client.get("/v1/stepups?user_id=user_demo&status=pending").json() == []
+
+
 def test_receipt_signed_and_chained(client):
     client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
     client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "hidden_injection"})

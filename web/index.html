@@ -36,9 +36,10 @@
 <main>
 <!-- ============================ SANDBOX ============================ -->
 <section id="tab-sandbox" class="tab active">
+  <div id="walkthrough" class="walkthrough" hidden aria-live="polite"></div>
   <div class="grid two">
     <div class="card">
-      <h2>1 · Pick an attack</h2>
+      <div class="section-heading"><h2>1 · Pick an attack</h2><button id="startWalkthrough" class="secondary" type="button">Start guided demo</button></div>
       <p class="hint">A naive shopping agent (KiranaBot) reads a FreshKart page, builds a cart and asks Anumati to authorise the payment. Each scenario plants a different steering attack in the page.</p>
       <div id="scenarioList" class="scenarios"></div>
       <div class="row">
@@ -73,6 +74,15 @@
         <pre id="attempt" class="mono"></pre>
       </div>
     </div>
+    <section class="evidence-panel" aria-live="polite">
+      <h3>Evidence chain</h3>
+      <div id="evidenceChain" class="evidence-chain"></div>
+    </section>
+    <section class="baseline-panel">
+      <h3>How other controls would decide</h3>
+      <p id="baselineNote" class="hint"></p>
+      <div id="baselineComparison"></div>
+    </section>
     <div class="row">
       <button id="openReceipt" class="secondary">Open decision receipt</button>
       <button id="raiseDispute" class="secondary">Raise a dispute on this decision</button>
@@ -112,7 +122,8 @@
 <section id="tab-stepups" class="tab">
   <div class="card">
     <h2>Pending confirmations</h2>
-    <p class="hint">When Anumati returns STEP_UP, the agent is held and the account holder gets a one-tap prompt (Firestore realtime listener; FCM push when configured). Approve or decline here.</p>
+    <p class="hint">The agent is held until the account holder approves or declines. Review the requested payment and the mandate reason before deciding.</p>
+    <div id="stepupOutcome" class="action-outcome" role="status" aria-live="polite" hidden></div>
     <div id="stepupList" class="list"></div>
   </div>
 </section>
@@ -132,6 +143,14 @@
       <h2>Decision receipts</h2>
       <p class="hint">Canonical JSON · SHA-256 · HMAC signature · hash-chained per mandate. Anyone with the receipt can re-verify it offline.</p>
       <div class="row"><button id="chainBtn" class="secondary">Verify chain for demo mandate</button><span id="chainResult" class="hint"></span></div>
+      <h3>Verify a receipt</h3>
+      <p class="hint">Open a receipt to load its original JSON. Change a signed value such as <code>risk_score</code>, then verify again. Only this editor copy changes; the saved receipt stays untouched.</p>
+      <textarea id="verifyReceiptInput" rows="8" placeholder="Open a receipt or paste receipt JSON here"></textarea>
+      <div class="row receipt-actions">
+        <button id="verifyReceiptBtn" class="primary" type="button">Verify current JSON</button>
+        <button id="reloadReceiptBtn" class="secondary" type="button" disabled>Reload original</button>
+      </div>
+      <div id="receiptVerifyResult" class="action-outcome" role="status" aria-live="polite"></div>
       <div id="receiptList" class="list"></div>
     </div>
     <div class="card">
