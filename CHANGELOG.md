@@ -4,6 +4,127 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.5.0] — Integration: evidence chain, baseline comparison, Firestore index tooling
+
+Integrates the contributed demo and infrastructure work on top of the review
+stack (0.2.0–0.4.0), reconciling overlaps so the console has exactly one receipt
+verifier and one guided demo.
+
+### Sandbox & console
+- **Evidence-chain panel** on the sandbox result: quotes the injection/intent-drift
+  findings verbatim and offers "Locate in merchant content" to jump to the exact
+  span in the (hidden or visible) page text. Quoted content is rendered as text
+  only and labelled untrusted.
+- **"How other controls would decide"** — every `/sim/run` now returns a
+  per-attempt `baseline_comparisons` block (caps-only, policy-only), rendered as a
+  three-row table (Caps-only / Policy-only / Anumati) so the marginal value of the
+  policy and semantic layers is visible inline, on the same request. This
+  complements the Gemini-vs-heuristic compare (0.4.0), which isolates the Gen-AI
+  layer specifically.
+- **Richer Step-ups tab**: each pending confirmation now shows the triggering
+  mandate rule, the requested basket, the risk reasons, and an outcome banner;
+  buttons disable while a response is in flight.
+- **Fixed stale step-up accumulation**: a fresh sandbox run now clears the pending
+  *simulated* step-ups tied to the decisions it resets, so the Step-ups tab no
+  longer carries confirmations from a previous scenario.
+- `127.0.0.1` is now treated as a local host for the default API base, alongside
+  `localhost` and `file:`.
+- Reconciled two parallel implementations: kept the browser-side, offline receipt
+  verifier (0.2.0) over a server-round-trip variant, and the auto-playing 7-beat
+  guided demo (0.3.0) over a lighter manual walkthrough — dropping the duplicates
+  so there is a single verifier and a single demo.
+
+### Infrastructure
+- Added `infra/firestore_indexes.py` and `tests/test_firestore_indexes.py` — a
+  programmatic definition and test of the composite indexes the Firestore backend
+  needs, alongside the `web/firestore.indexes.json` that `deploy.sh` ships.
+
+## [0.4.0] — Gemini vs heuristic side-by-side
+
+Makes the Gen-AI layer's contribution visible and measurable — directly serving
+the rubric's 40%-weighted "meaningful use of Gen AI" criterion.
+
+- **New `POST /sim/compare`** (read-only): runs one scenario's payment through
+  **both** semantic engines — the deterministic heuristic and Gemini — against
+  the *same* deterministic policy and the *same* page content, and returns each
+  engine's injection/drift scores, reasons, verbatim injected text, and the
+  verdict each would yield. Persists nothing. When no Gemini key is configured,
+  the `gemini` arm is `null` and `gemini_available` is `false`.
+- **New "⚖ Gemini vs heuristic" button** in the sandbox renders the two engines
+  side by side with score bars and reasons, and a verdict note that calls out
+  agreement, disagreement, or (locally) how to enable Gemini.
+- Refactored `semantic.py` into `heuristic_analyse()` and `gemini_analyse()`
+  (Gemini-only, returns `None` on absence/failure); `analyse()` is now
+  `gemini_analyse(...) or heuristic_analyse(...)` — same production behaviour,
+  but each engine is independently callable.
+- Added a test asserting the comparison is read-only and that the heuristic arm
+  blocks the hidden-injection scenario while the Gemini arm is null in CI.
+
+## [0.3.0] — One-click guided demo walkthrough
+
+- **New "▶ Guided demo" button** in the console header. It drives the *real*
+  console through the canonical story end to end (PRD §4/§8), narrating each beat
+  in a bottom bar and highlighting the live card:
+  1. **The mandate** — authorisation vs faithfulness.
+  2. **Clean run → APPROVE** (verified payee, receipt issued).
+  3. **Hidden-text redirect → BLOCK** (unverified payee + suspect registry +
+     injected text captured verbatim).
+  4. **Review injection → STEP_UP → declined** in one tap.
+  5. **Dispute → liability attribution** (replays the signed receipt; lands on
+     merchant/content provider).
+  6. **Tamper-proof evidence** — auto-tampers the blocked receipt and the HMAC
+     breaks on screen.
+  7. **Recap.**
+- Auto-plays with **Pause / Next / Exit / Replay** controls and a progress
+  indicator. Each step chains the next by capturing real decision / receipt /
+  step-up ids returned by the API — nothing is faked.
+- Driver is **re-entrancy-guarded**: a step in flight ignores further
+  advance clicks and disables Next, so fast clicking or clashing with auto-play
+  can't fire overlapping API calls (the cause of a transient dispute-step 404
+  during development).
+- Refactored the receipt tamper action into a reusable `tamperReceiptAmount()`
+  so the walkthrough and the manual button share one code path.
+- `DEMO_SCRIPT.md` notes the one-click walkthrough as the fastest way to show
+  the full story; README quick-start points to the button.
+
+## [0.2.1] — Theme & rubric alignment
+
+- Added `docs/THEME_ALIGNMENT.md`: validates Anumati against the AI Builder Cup
+  2026 BFSI track, the required technology (Gemini/Gemma + Cloud Run/Firebase),
+  and the judging rubric (Technical/Gen-AI 40%, Problem/Impact 25%, Innovation
+  25%, UX 10%), with an evidence map per criterion and an honest list of risks
+  (Gen-AI weighting, heuristic-vs-Gemini judged build, category label,
+  eligibility, repo visibility).
+- `docs/SUBMISSION.md`: corrected the repo-visibility note (private during the
+  build, make public before the deadline), added the judging criteria and
+  weights, and expanded the pre-submission checklist (Gemini build, category
+  label, eligibility).
+
+## [0.2.0] — Tamper-evident receipt verifier
+
+Makes PRD §8's "a tampered receipt fails verification **on stage**" a one-click
+demo, and fixes a correctness bug that quietly broke the receipt's core promise.
+
+### Console
+- New **interactive receipt verifier** in the Receipts tab. Opening a receipt
+  loads it into an editable panel and verifies it live (`signature valid ✅`).
+  Judges can edit any field by hand, hit **Verify signature**, and watch the
+  HMAC break; a one-click **Tamper the amount →** does it for them, and **Reset
+  to original** restores the signed copy. The result banner explains the outcome
+  in dispute terms ("a dispute party would reject it").
+
+### Receipts (correctness)
+- **Fixed cross-language canonicalisation.** The signed body contained
+  integer-valued floats (`2000.0`, `1041.0`); Python's `json.dumps` emits
+  `2000.0` where JavaScript's `JSON.stringify` emits `2000`, so a receipt signed
+  by the gateway **failed to verify in any non-Python verifier** (including the
+  browser console) — silently breaking the "verifiable offline by any party"
+  guarantee (PRD NFR §6). `canonical()` now normalises integer-valued floats to
+  integers before hashing, so the canonical form is identical across languages.
+  Signing and verification use the same normalisation, so the chain stays intact.
+- Added a regression test that re-serialises a receipt the way a browser would
+  (collapsing `2000.0 → 2000`) and asserts it still verifies.
+
 ## [0.1.1] — Review pass
 
 A correctness, honesty and hardening pass over the initial build. No feature was

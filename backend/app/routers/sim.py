@@ -18,10 +18,13 @@ import time
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from ..engine import decide
-from ..gemini import generate_json
+from ..config import settings
+from ..engine import baseline_caps_only, baseline_policy_only, decide, fuse
+from ..gemini import engine_name, generate_json
 from ..models import CartItem, PaymentRequest, TraceStep
+from ..policy import run_policy
 from ..scenarios import MERCHANT, SCENARIOS
+from ..semantic import gemini_analyse, heuristic_analyse
 from ..store import get_store
 
 router = APIRouter(prefix="/sim", tags=["sandbox"])
@@ -83,7 +86,12 @@ def run(body: dict):
     # Each sandbox run starts from a clean simulated history for the mandate so
     # scenarios don't contaminate each other (receipts are kept — the chain is append-only).
     if body.get("fresh", True):
-        for d in store.query("decisions", [("request.mandate_id", "==", mandate["id"]), ("request.simulated", "==", True)]):
+        simulated_decisions = store.query("decisions", [("request.mandate_id", "==", mandate["id"]), ("request.simulated", "==", True)])
+        simulated_ids = {decision["id"] for decision in simulated_decisions}
+        for stepup in store.query("stepups", [("mandate_id", "==", mandate["id"]), ("status", "==", "pending")]):
+            if stepup.get("decision_id") in simulated_ids:
+                store.delete("stepups", stepup["id"])
+        for d in simulated_decisions:
             store.delete("decisions", d["id"])
 
     plan = None
@@ -97,6 +105,7 @@ def run(body: dict):
                 "cart": n["cart"], "trace": n["trace"], "merchant": n["merchant"], "category": n["category"]}
 
     decisions = []
+    baseline_comparisons = []
     for i in range(s.get("multi", 1)):
         trace = [TraceStep(step=k + 1, kind="observe" if k == 0 else "think" if k < len(plan["trace"]) - 1 else "act", content=t)
                  for k, t in enumerate(plan["trace"])]
@@ -109,6 +118,11 @@ def run(body: dict):
             cart=[CartItem(**c) for c in plan.get("cart", [])], agent_trace=trace,
             consumed_content=s["page"], simulated=True, scenario=scenario_key,
         )
+        baseline_comparisons.append({
+            "attempt": i + 1,
+            "caps_only": baseline_caps_only(req, store),
+            "policy_only": baseline_policy_only(req, store),
+        })
         d = decide(req, store)
         decisions.append(d.model_dump())
         if d.verdict == "BLOCK":
@@ -119,6 +133,64 @@ def run(body: dict):
     return {
         "scenario": scenario_key, "title": s["title"], "attack": s["attack"], "expected": s["expected"],
         "agent_engine": agent_engine, "agent_plan": {k: v for k, v in plan.items() if k != "trace"},
-        "decisions": decisions, "final_verdict": final["verdict"], "caught": final["verdict"] == s["expected"],
+        "decisions": decisions, "baseline_comparisons": baseline_comparisons,
+        "final_verdict": final["verdict"], "caught": final["verdict"] == s["expected"],
         "receipt_id": final["receipt_id"], "stepup_id": final.get("stepup_id"),
+    }
+
+
+@router.post("/compare")
+def compare(body: dict):
+    """Run one scenario's payment through BOTH semantic engines — the deterministic
+    heuristic and Gemini — against the *same* deterministic policy, so the Gen-AI
+    layer's unique contribution is visible side by side. Read-only: no decision or
+    receipt is persisted. When no Gemini key is configured, the Gemini arm is null
+    and the UI shows how to enable it."""
+    store = get_store()
+    scenario_key = body.get("scenario", "clean")
+    s = SCENARIOS.get(scenario_key)
+    if not s:
+        raise HTTPException(404, "unknown scenario")
+    mandate = store.get("mandates", body.get("mandate_id", ""))
+    if not mandate:
+        raise HTTPException(404, "mandate not found")
+
+    n = s["naive"]  # fixed, reproducible agent plan so the two engines see identical input
+    trace = [TraceStep(step=k + 1, kind="observe" if k == 0 else "think", content=t) for k, t in enumerate(n["trace"])]
+    req = PaymentRequest(
+        agent_id=mandate["agent_id"], mandate_id=mandate["id"], user_id=mandate["user_id"],
+        payee_vpa=n["payee_vpa"], payee_name=n["payee_name"], merchant=n.get("merchant") or "FreshKart",
+        amount=float(n["amount"]), category=n.get("category") or "groceries",
+        cart=[CartItem(**c) for c in n.get("cart", [])], agent_trace=trace,
+        consumed_content=s["page"], simulated=True, scenario=scenario_key,
+    )
+    policy_findings, hard_fail = run_policy(req, mandate, store)
+    policy_sum = min(100, sum(f.weight for f in policy_findings))
+    has_stepup_rule = any(f.code == "STEP_UP_RULE" for f in policy_findings)
+
+    def arm(sem):
+        risk = 100 if hard_fail else fuse(policy_sum, sem.injection_score, sem.drift_score)
+        if hard_fail or risk >= settings.block_threshold:
+            verdict = "BLOCK"
+        elif risk >= settings.step_up_threshold or has_stepup_rule:
+            verdict = "STEP_UP"
+        else:
+            verdict = "APPROVE"
+        return {
+            "engine": sem.engine, "verdict": verdict, "risk": risk,
+            "injection_score": sem.injection_score, "drift_score": sem.drift_score,
+            "injection_reasons": sem.injection_reasons, "drift_reasons": sem.drift_reasons,
+            "injected_instructions": sem.injected_instructions, "summary": sem.summary,
+        }
+
+    gem = gemini_analyse(req, mandate)  # None when no key / model failure
+    return {
+        "scenario": scenario_key, "title": s["title"], "attack": s["attack"], "expected": s["expected"],
+        "payment": {"payee_vpa": req.payee_vpa, "payee_name": req.payee_name, "amount": req.amount,
+                    "merchant": req.merchant, "cart": [c.model_dump() for c in req.cart]},
+        "policy": {"policy_sum": policy_sum, "hard_fail": hard_fail,
+                   "findings": [f.model_dump() for f in policy_findings]},
+        "heuristic": arm(heuristic_analyse(req, mandate)),
+        "gemini": arm(gem) if gem else None,
+        "gemini_available": gem is not None and engine_name() == "gemini",
     }

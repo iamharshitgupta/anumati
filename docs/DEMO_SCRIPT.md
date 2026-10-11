@@ -2,6 +2,12 @@
 
 Target: 2:50. Record the console at 1440×900, API on Cloud Run with Gemini enabled. Rehearse once with `?` — every beat below is one click.
 
+> **Fastest path:** click **▶ Guided demo** in the header to auto-run the entire
+> story below (mandate → approve → block → step-up decline → dispute →
+> tamper-proof receipt) with on-screen narration and Pause/Next/Replay controls.
+> Use it for a hands-free run or as a rehearsal track; the manual beats below
+> give you finer control and the full script to narrate over.
+
 | Time | Screen | Say |
 |---|---|---|
 | 0:00–0:20 | Title card → architecture.png | "NPCI is about to let AI agents pay on UPI without asking you each time. Google's AP2 proves you *authorised* the agent. Nothing proves the agent wasn't steered between your instruction and the rail. Anumati is the gateway that answers that question for every payment — and signs the evidence." |

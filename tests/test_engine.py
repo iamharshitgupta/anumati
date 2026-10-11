@@ -52,6 +52,38 @@ def test_sandbox_scenarios(client, scenario, expected):
     assert r.json()["final_verdict"] == expected
 
 
+def test_compare_engines_side_by_side(client):
+    """/sim/compare runs both semantic engines against the same policy, read-only.
+    With Gemini disabled (as in CI), the heuristic arm decides and the gemini arm
+    is null — the UI uses this to prompt enabling Gemini."""
+    before = len(client.get(f"/v1/decisions").json())
+    r = client.post("/sim/compare", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "hidden_injection"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["heuristic"]["engine"] == "heuristic"
+    assert body["heuristic"]["verdict"] == "BLOCK"
+    assert body["heuristic"]["injection_score"] > 0
+    assert body["gemini"] is None and body["gemini_available"] is False
+    # read-only: no decision persisted
+    assert len(client.get(f"/v1/decisions").json()) == before
+
+
+def test_sandbox_reports_same_request_baseline_comparison(client):
+    r = client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "review_upsell_injection"})
+    assert r.status_code == 200, r.text
+    result = r.json()
+    assert result["final_verdict"] == "STEP_UP"
+    assert result["baseline_comparisons"] == [{"attempt": 1, "caps_only": "APPROVE", "policy_only": "APPROVE"}]
+
+
+def test_fresh_sandbox_run_clears_stale_simulated_stepups(client):
+    first = client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "price_inflation"}).json()
+    assert first["stepup_id"]
+    assert len(client.get("/v1/stepups?user_id=user_demo&status=pending").json()) == 1
+    client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
+    assert client.get("/v1/stepups?user_id=user_demo&status=pending").json() == []
+
+
 def test_receipt_signed_and_chained(client):
     client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
     client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "hidden_injection"})
@@ -63,6 +95,31 @@ def test_receipt_signed_and_chained(client):
     tampered["risk_score"] = 0
     assert verify_signature(tampered) is False
     assert client.post("/v1/receipts/verify", json=tampered).json()["valid"] is False
+
+
+def test_receipt_verifies_after_cross_language_number_roundtrip(client):
+    """A receipt must still verify after a non-Python verifier (e.g. a browser)
+    re-serialises it, collapsing integer-valued floats like 2000.0 -> 2000.
+    Guards the 'verifiable offline by any party' guarantee."""
+    import json as _json
+
+    client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
+    receipt = client.get(f"/v1/receipts?mandate_id={DEMO_MANDATE_ID}").json()[0]
+
+    def jsify(o):  # emulate JavaScript's JSON.stringify number handling
+        if isinstance(o, bool):
+            return o
+        if isinstance(o, float) and o.is_integer():
+            return int(o)
+        if isinstance(o, dict):
+            return {k: jsify(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [jsify(v) for v in o]
+        return o
+
+    roundtripped = _json.loads(_json.dumps(jsify(receipt)))
+    assert verify_signature(roundtripped) is True
+    assert client.post("/v1/receipts/verify", json=roundtripped).json()["valid"] is True
 
 
 def test_stepup_flow_and_dispute(client):
