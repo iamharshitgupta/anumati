@@ -4,6 +4,41 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.5.0] — Integration: evidence chain, baseline comparison, Firestore index tooling
+
+Integrates the contributed demo and infrastructure work on top of the review
+stack (0.2.0–0.4.0), reconciling overlaps so the console has exactly one receipt
+verifier and one guided demo.
+
+### Sandbox & console
+- **Evidence-chain panel** on the sandbox result: quotes the injection/intent-drift
+  findings verbatim and offers "Locate in merchant content" to jump to the exact
+  span in the (hidden or visible) page text. Quoted content is rendered as text
+  only and labelled untrusted.
+- **"How other controls would decide"** — every `/sim/run` now returns a
+  per-attempt `baseline_comparisons` block (caps-only, policy-only), rendered as a
+  three-row table (Caps-only / Policy-only / Anumati) so the marginal value of the
+  policy and semantic layers is visible inline, on the same request. This
+  complements the Gemini-vs-heuristic compare (0.4.0), which isolates the Gen-AI
+  layer specifically.
+- **Richer Step-ups tab**: each pending confirmation now shows the triggering
+  mandate rule, the requested basket, the risk reasons, and an outcome banner;
+  buttons disable while a response is in flight.
+- **Fixed stale step-up accumulation**: a fresh sandbox run now clears the pending
+  *simulated* step-ups tied to the decisions it resets, so the Step-ups tab no
+  longer carries confirmations from a previous scenario.
+- `127.0.0.1` is now treated as a local host for the default API base, alongside
+  `localhost` and `file:`.
+- Reconciled two parallel implementations: kept the browser-side, offline receipt
+  verifier (0.2.0) over a server-round-trip variant, and the auto-playing 7-beat
+  guided demo (0.3.0) over a lighter manual walkthrough — dropping the duplicates
+  so there is a single verifier and a single demo.
+
+### Infrastructure
+- Added `infra/firestore_indexes.py` and `tests/test_firestore_indexes.py` — a
+  programmatic definition and test of the composite indexes the Firestore backend
+  needs, alongside the `web/firestore.indexes.json` that `deploy.sh` ships.
+
 ## [0.4.0] — Gemini vs heuristic side-by-side
 
 Makes the Gen-AI layer's contribution visible and measurable — directly serving
