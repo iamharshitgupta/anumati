@@ -148,7 +148,40 @@ async function loadReceipts() {
       <div class="actions"><button class="secondary tiny" data-open="${r.id}">Open</button></div></div>`).join("");
   document.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openReceipt(b.dataset.open));
 }
-async function openReceipt(id) { const r = await api(`/v1/receipts/${id}`); $("#receiptView").textContent = JSON.stringify(r, null, 2); }
+// ---- receipt verifier (tamper-evident) ----------------------------------
+let openReceiptJson = null;   // the untouched receipt as issued, for "reset"
+function setVerifyBadge(state, text) { const b = $("#verifyBadge"); b.textContent = text; b.className = "badge " + (state === "ok" ? "ok" : state === "bad" ? "bad" : "muted"); }
+async function openReceipt(id) {
+  const r = await api(`/v1/receipts/${id}`);
+  openReceiptJson = r;
+  $("#receiptView").value = JSON.stringify(r, null, 2);
+  $("#verifyResult").innerHTML = "";
+  await verifyCurrentReceipt(true);
+}
+async function verifyCurrentReceipt(quiet) {
+  let receipt;
+  try { receipt = JSON.parse($("#receiptView").value); }
+  catch (e) { setVerifyBadge("bad", "invalid JSON"); $("#verifyResult").innerHTML = `<div class="bad">Receipt is not valid JSON — ${esc(e.message)}</div>`; return; }
+  const res = await api("/v1/receipts/verify", { method: "POST", body: receipt });
+  if (res.valid) {
+    setVerifyBadge("ok", "signature valid ✅");
+    $("#verifyResult").innerHTML = `<div class="ok">✅ <b>Signature valid.</b> The HMAC matches the SHA-256 of the canonical body — this receipt is exactly what Anumati signed. Hash <code>${esc((res.hash || "").slice(0, 24))}…</code></div>`;
+  } else {
+    setVerifyBadge("bad", "signature INVALID ❌");
+    $("#verifyResult").innerHTML = `<div class="bad">❌ <b>Signature does not verify.</b> The body no longer hashes to the signed value — this receipt has been altered or the signing key differs. A dispute party would reject it.</div>`;
+  }
+}
+$("#verifyReceiptBtn").addEventListener("click", () => verifyCurrentReceipt(false));
+$("#resetReceiptBtn").addEventListener("click", () => { if (openReceiptJson) { $("#receiptView").value = JSON.stringify(openReceiptJson, null, 2); verifyCurrentReceipt(false); } });
+$("#tamperBtn").addEventListener("click", () => {
+  let r; try { r = JSON.parse($("#receiptView").value); } catch { return; }
+  const before = r.attempted?.amount;
+  if (r.attempted && typeof r.attempted.amount === "number") r.attempted.amount = r.attempted.amount + 1000;
+  else return;
+  $("#receiptView").value = JSON.stringify(r, null, 2);
+  $("#verifyResult").innerHTML = `<div class="warn">Changed <code>attempted.amount</code> from ₹${before} to ₹${r.attempted.amount} — a single rupee-field edit. Now re-verifying…</div>`;
+  setTimeout(() => verifyCurrentReceipt(false), 400);
+});
 $("#chainBtn").addEventListener("click", async () => { const c = await api(`/v1/receipts/chain/${$("#sandboxMandate").value || "mnd_demo0001"}`); $("#chainResult").textContent = `${c.receipts} receipts · chain ${c.chain_intact ? "intact ✅" : "BROKEN at " + c.broken_at + " ❌"}`; });
 
 $("#disputeBtn").addEventListener("click", async () => {

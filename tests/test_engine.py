@@ -65,6 +65,31 @@ def test_receipt_signed_and_chained(client):
     assert client.post("/v1/receipts/verify", json=tampered).json()["valid"] is False
 
 
+def test_receipt_verifies_after_cross_language_number_roundtrip(client):
+    """A receipt must still verify after a non-Python verifier (e.g. a browser)
+    re-serialises it, collapsing integer-valued floats like 2000.0 -> 2000.
+    Guards the 'verifiable offline by any party' guarantee."""
+    import json as _json
+
+    client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
+    receipt = client.get(f"/v1/receipts?mandate_id={DEMO_MANDATE_ID}").json()[0]
+
+    def jsify(o):  # emulate JavaScript's JSON.stringify number handling
+        if isinstance(o, bool):
+            return o
+        if isinstance(o, float) and o.is_integer():
+            return int(o)
+        if isinstance(o, dict):
+            return {k: jsify(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [jsify(v) for v in o]
+        return o
+
+    roundtripped = _json.loads(_json.dumps(jsify(receipt)))
+    assert verify_signature(roundtripped) is True
+    assert client.post("/v1/receipts/verify", json=roundtripped).json()["valid"] is True
+
+
 def test_stepup_flow_and_dispute(client):
     r = client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "price_inflation"}).json()
     su = r["stepup_id"]

@@ -14,7 +14,7 @@ AI Builder Cup 2026 · BFSI: Intelligent Risk, Fraud & Financial Experiences
 | **Mandate compiler** | "Weekly groceries from FreshKart or Zepto, ≤₹2,000/order, never a new payee, confirm above ₹1,500" → schema-validated guardrails via **Gemini** structured output, clamped to UPI Circle ceilings, signed by the user |
 | **Dual-check decision engine** | Deterministic policy (caps, velocity, structuring, verified-merchant payee resolution, suspect registry, category scope, cart integrity) **+** Gemini semantic audit of the content the agent read and the reasoning it produced (injection score, intent-drift score) |
 | **Graduated verdict** | APPROVE · STEP_UP (one-tap human confirm via **Firestore** realtime listener) · BLOCK |
-| **Signed Decision Receipts** | Canonical JSON → SHA-256 → HMAC, hash-chained per mandate, verifiable offline; plain-language memo and AP2-style liability hints |
+| **Signed Decision Receipts** | Canonical JSON → SHA-256 → HMAC, hash-chained per mandate, verifiable offline **in any language** (the console re-verifies in the browser; edit any field and the signature breaks live); plain-language memo and AP2-style liability hints |
 | **Dispute workbench** | Replays the receipt; Gemini drafts a neutral attribution across user / agent provider / merchant / issuer; a human closes the case |
 | **Red-team sandbox** | Eight mock merchant pages (clean + seven attacks) and a steerable shopping agent, so judges watch the attack and the catch live |
 | **Evaluation** | 44 synthetic cases (25 attack / 19 benign, incl. hard negatives) vs. a *fair* deterministic-policy baseline **and** a caps-only baseline, with the semantic layer's marginal lift isolated — see [`eval/RESULTS.md`](eval/RESULTS.md) |
@@ -145,6 +145,10 @@ that break no hard rule. See [`eval/RESULTS.md`](eval/RESULTS.md).
   synthetic dataset; a production per-user ruleset ships commented in
   `web/firestore.rules`. Secrets live in Secret Manager; the HMAC signing key is
   swappable for Cloud KMS without changing the receipt format.
+- **Receipts verify in any language.** The canonical form normalises
+  integer-valued floats so a receipt signed by the Python gateway re-verifies
+  byte-for-byte in a browser (or any other) verifier — the Receipts tab proves
+  it live, and tampering with any field breaks the signature on screen.
 
 ## Version history
 
