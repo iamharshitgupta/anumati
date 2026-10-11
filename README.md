@@ -34,7 +34,7 @@ cd backend && pip install -r requirements.txt
 uvicorn app.main:app --port 8080            # in-memory store, heuristic semantics
 # GOOGLE_API_KEY=... uvicorn app.main:app --port 8080   # with Gemini
 ```
-Open the console: `cd web && python3 -m http.server 5173` → http://localhost:5173 (it points at `http://localhost:8080` by default).
+Open the console: `cd web && python3 -m http.server 5173` → http://localhost:5173 (it points at `http://localhost:8080` by default). Click **▶ Guided demo** to auto-run the whole story (mandate → approve → block → step-up decline → dispute → tamper-proof receipt) with narration.
 
 Try an attack from the shell:
 ```bash

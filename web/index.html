@@ -18,11 +18,24 @@
     </div>
   </div>
   <div class="status">
+    <button id="guidedBtn" class="guided">▶ Guided demo</button>
     <label>API <input id="apiBase" value="" placeholder="https://anumati-xxxx.a.run.app" spellcheck="false"></label>
     <span id="engineBadge" class="badge">connecting…</span>
     <span id="rtBadge" class="badge muted">realtime: polling</span>
   </div>
 </header>
+
+<div id="demoBar" hidden>
+  <div class="demoInner">
+    <div class="demoText"><span id="demoStep" class="demoStepNo"></span><span id="demoCaption"></span></div>
+    <div class="demoCtrls">
+      <span id="demoProgress" class="demoProgress"></span>
+      <button id="demoPlay" class="secondary tiny">⏸ Pause</button>
+      <button id="demoNext" class="secondary tiny">Next ›</button>
+      <button id="demoStop" class="secondary tiny">✕ Exit</button>
+    </div>
+  </div>
+</div>
 
 <nav class="tabs">
   <button data-tab="sandbox" class="active">Red-team sandbox</button>
