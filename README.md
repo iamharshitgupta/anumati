@@ -17,6 +17,7 @@ AI Builder Cup 2026 · BFSI: Intelligent Risk, Fraud & Financial Experiences
 | **Signed Decision Receipts** | Canonical JSON → SHA-256 → HMAC, hash-chained per mandate, verifiable offline **in any language** (the console re-verifies in the browser; edit any field and the signature breaks live); plain-language memo and AP2-style liability hints |
 | **Dispute workbench** | Replays the receipt; Gemini drafts a neutral attribution across user / agent provider / merchant / issuer; a human closes the case |
 | **Red-team sandbox** | Eight mock merchant pages (clean + seven attacks) and a steerable shopping agent, so judges watch the attack and the catch live |
+| **Gemini vs heuristic** | One click runs a scenario through both semantic engines against the same policy and content (`/sim/compare`), isolating what the Gen-AI layer adds over rules — scores, reasons and the verdict each yields, side by side |
 | **Evaluation** | 44 synthetic cases (25 attack / 19 benign, incl. hard negatives) vs. a *fair* deterministic-policy baseline **and** a caps-only baseline, with the semantic layer's marginal lift isolated — see [`eval/RESULTS.md`](eval/RESULTS.md) |
 
 ## Google Cloud services
@@ -67,7 +68,7 @@ The script enables APIs, creates Firestore, stores secrets, deploys Cloud Run fr
 | GET | `/v1/stepups` · POST `/v1/stepups/{id}/respond` | human one-tap |
 | GET | `/v1/receipts/{id}` · `/v1/receipts/chain/{mandate}` · POST `/v1/receipts/verify` | receipts & offline verification |
 | POST | `/v1/disputes` · `/{id}/resolve` | dispute replay & attribution |
-| GET/POST | `/sim/scenarios` · `/sim/merchant/{s}` · `/sim/run` | red-team sandbox |
+| GET/POST | `/sim/scenarios` · `/sim/merchant/{s}` · `/sim/run` · `/sim/compare` | red-team sandbox (incl. Gemini-vs-heuristic compare) |
 
 Interactive docs at `/docs`.
 

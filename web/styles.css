@@ -91,6 +91,24 @@ textarea.mono { line-height: 1.4; }
 .memo { background: var(--panel-2); border-radius: 10px; padding: 12px; font-size: 13px; }
 .memo h4 { margin: 8px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
 .memo .party { font-family: var(--mono); font-size: 18px; color: var(--accent-2); }
+/* engine compare */
+.cmpcol { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--panel-2); }
+.cmpcol.missing { display: flex; flex-direction: column; justify-content: center; }
+.cmphead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+.verdict.mini { font-size: 15px; padding: 2px 10px; border-radius: 8px; }
+.cmpbar { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12px; }
+.cmplabel { width: 62px; color: var(--muted); font-family: var(--mono); }
+.cmpmeter { flex: 1; height: 10px; background: var(--panel); border-radius: 999px; overflow: hidden; }
+.cmpmeter div { height: 100%; background: linear-gradient(90deg, var(--ok), var(--warn) 50%, var(--bad)); }
+.cmpbar b { width: 26px; text-align: right; font-family: var(--mono); }
+.cmpinj { margin: 8px 0; font-size: 12.5px; }
+.cmpinj ul { margin: 4px 0 0; padding-left: 16px; }
+.cmpinj li { color: #ffb3bb; font-family: var(--mono); font-size: 11.5px; }
+.cmpsum { margin-top: 8px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+.cmpmissing { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.cmpmissing code { font-family: var(--mono); color: var(--accent-2); font-size: 12px; }
+.cmpnote { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; }
+
 /* guided demo */
 button.guided { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #1a1200; border: none; padding: 7px 14px; border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer; }
 button.guided.running { background: var(--panel-2); color: var(--accent-2); border: 1px solid var(--accent); }

@@ -52,6 +52,22 @@ def test_sandbox_scenarios(client, scenario, expected):
     assert r.json()["final_verdict"] == expected
 
 
+def test_compare_engines_side_by_side(client):
+    """/sim/compare runs both semantic engines against the same policy, read-only.
+    With Gemini disabled (as in CI), the heuristic arm decides and the gemini arm
+    is null — the UI uses this to prompt enabling Gemini."""
+    before = len(client.get(f"/v1/decisions").json())
+    r = client.post("/sim/compare", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "hidden_injection"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["heuristic"]["engine"] == "heuristic"
+    assert body["heuristic"]["verdict"] == "BLOCK"
+    assert body["heuristic"]["injection_score"] > 0
+    assert body["gemini"] is None and body["gemini_available"] is False
+    # read-only: no decision persisted
+    assert len(client.get(f"/v1/decisions").json()) == before
+
+
 def test_receipt_signed_and_chained(client):
     client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "clean"})
     client.post("/sim/run", json={"mandate_id": DEMO_MANDATE_ID, "scenario": "hidden_injection"})

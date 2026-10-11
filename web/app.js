@@ -65,6 +65,37 @@ $("#runBtn").addEventListener("click", async () => {
   } catch (e) { toast(`<b>Run failed</b><br>${esc(e.message)}`); }
   btn.disabled = false; btn.textContent = "Run attack through Anumati →";
 });
+// ---- Gemini vs heuristic side-by-side ----------------------------------
+const GEMINI_HELP = "Gemini isn't configured on this API, so the gateway is running the deterministic heuristic (never failing open). Start the backend with <code>GOOGLE_API_KEY=…</code> (or <code>USE_VERTEX=1</code>) and this column fills in — the engine badge up top will read <b>semantic: gemini</b>.";
+function engineCol(title, a, missingHtml) {
+  if (!a) return `<div class="cmpcol missing"><div class="cmphead">${title}</div><div class="cmpmissing">${missingHtml}</div></div>`;
+  const bar = (label, v) => `<div class="cmpbar"><span class="cmplabel">${label}</span><div class="cmpmeter"><div style="width:${v}%"></div></div><b>${v}</b></div>`;
+  const reasons = [...(a.injection_reasons || []), ...(a.drift_reasons || [])].slice(0, 6);
+  return `<div class="cmpcol">
+    <div class="cmphead">${title}<span class="verdict ${a.verdict} mini">${a.verdict}</span><span class="tag">risk ${a.risk}</span></div>
+    ${bar("injection", a.injection_score)}${bar("drift", a.drift_score)}
+    ${a.injected_instructions && a.injected_instructions.length ? `<div class="cmpinj"><b>Injected text caught verbatim:</b><ul>${a.injected_instructions.map((s) => `<li>${esc(s)}</li>`).join("")}</ul></div>` : ""}
+    <ul class="notes">${reasons.map((r) => `<li>${esc(r)}</li>`).join("") || "<li class='muted'>no steering signals</li>"}</ul>
+    ${a.summary ? `<div class="cmpsum">${esc(a.summary)}</div>` : ""}
+  </div>`;
+}
+function renderCompare(c) {
+  $("#compareCard").hidden = false;
+  $("#compareGrid").innerHTML = engineCol("Heuristic <span class='tag'>no LLM</span>", c.heuristic, "") + engineCol("Gemini 2.5 Flash", c.gemini, GEMINI_HELP);
+  let note;
+  if (!c.gemini_available || !c.gemini) note = `Heuristic verdict on <b>${esc(c.title)}</b>: <b>${c.heuristic.verdict}</b> (policy Σ ${c.policy.policy_sum}). Configure Gemini to compare the model's reading of the same inputs — on a deployed build this is the number judges score.`;
+  else if (c.gemini.verdict === c.heuristic.verdict) note = `Both engines land on <b>${c.gemini.verdict}</b> (policy Σ ${c.policy.policy_sum}). Here the Gemini audit <b>corroborates</b> the heuristic — but note the scores and reasons it surfaces independently.`;
+  else note = `Engines <b>disagree</b> on identical policy + content: heuristic <b>${c.heuristic.verdict}</b> vs Gemini <b>${c.gemini.verdict}</b>. The semantic reading changed the outcome — exactly the content-steering gap rules can't see.`;
+  $("#compareVerdictNote").innerHTML = note;
+  $("#compareCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("#compareBtn").addEventListener("click", async () => {
+  const btn = $("#compareBtn"); btn.disabled = true; btn.textContent = "Comparing…";
+  try { renderCompare(await api("/sim/compare", { method: "POST", body: { mandate_id: $("#sandboxMandate").value, scenario } })); }
+  catch (e) { toast(`<b>Compare failed</b><br>${esc(e.message)}`); }
+  btn.disabled = false; btn.textContent = "⚖ Gemini vs heuristic";
+});
+
 function renderResult(r) {
   const d = r.decisions[r.decisions.length - 1];
   $("#result").hidden = false;
