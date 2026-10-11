@@ -4,6 +4,27 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.4.0] — Gemini vs heuristic side-by-side
+
+Makes the Gen-AI layer's contribution visible and measurable — directly serving
+the rubric's 40%-weighted "meaningful use of Gen AI" criterion.
+
+- **New `POST /sim/compare`** (read-only): runs one scenario's payment through
+  **both** semantic engines — the deterministic heuristic and Gemini — against
+  the *same* deterministic policy and the *same* page content, and returns each
+  engine's injection/drift scores, reasons, verbatim injected text, and the
+  verdict each would yield. Persists nothing. When no Gemini key is configured,
+  the `gemini` arm is `null` and `gemini_available` is `false`.
+- **New "⚖ Gemini vs heuristic" button** in the sandbox renders the two engines
+  side by side with score bars and reasons, and a verdict note that calls out
+  agreement, disagreement, or (locally) how to enable Gemini.
+- Refactored `semantic.py` into `heuristic_analyse()` and `gemini_analyse()`
+  (Gemini-only, returns `None` on absence/failure); `analyse()` is now
+  `gemini_analyse(...) or heuristic_analyse(...)` — same production behaviour,
+  but each engine is independently callable.
+- Added a test asserting the comparison is read-only and that the heuristic arm
+  blocks the hidden-injection scenario while the Gemini arm is null in CI.
+
 ## [0.3.0] — One-click guided demo walkthrough
 
 - **New "▶ Guided demo" button** in the console header. It drives the *real*

@@ -58,7 +58,10 @@
         <label>Agent <select id="agentMode"><option value="naive">naive (scripted, steerable)</option><option value="gemini">Gemini-driven agent</option></select></label>
         <label>Mandate <select id="sandboxMandate"></select></label>
       </div>
-      <button id="runBtn" class="primary">Run attack through Anumati →</button>
+      <div class="row">
+        <button id="runBtn" class="primary">Run attack through Anumati →</button>
+        <button id="compareBtn" class="secondary">⚖ Gemini vs heuristic</button>
+      </div>
     </div>
     <div class="card">
       <h2>2 · What the agent read</h2>
@@ -66,6 +69,13 @@
       <div id="merchantView" class="merchant"></div>
       <details id="hiddenView" class="hidden-content"><summary>Show hidden / injected content</summary><pre id="hiddenPre"></pre></details>
     </div>
+  </div>
+
+  <div id="compareCard" class="card" hidden>
+    <h2>⚖ Gemini vs heuristic — same policy, same content</h2>
+    <p class="hint">Identical deterministic policy and identical page content feed both columns; only the <b>semantic auditor</b> differs. This isolates exactly what the Gen-AI layer contributes over rules alone.</p>
+    <div id="compareGrid" class="grid two"></div>
+    <div id="compareVerdictNote" class="cmpnote"></div>
   </div>
 
   <div id="result" class="card result" hidden>

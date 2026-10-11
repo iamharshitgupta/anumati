@@ -126,7 +126,17 @@ _SCHEMA = {
 }
 
 
-def analyse(req: PaymentRequest, mandate: dict) -> SemanticResult:
+def heuristic_analyse(req: PaymentRequest, mandate: dict) -> SemanticResult:
+    """Always-available regex/rule semantic audit. Never calls a model."""
+    inj, inj_reasons, snippets = _heuristic_injection(req.consumed_content or "")
+    drift, drift_reasons = _heuristic_drift(req, mandate)
+    summary = "Heuristic audit: " + ("no steering signals found." if inj == 0 and drift == 0 else
+                                       f"injection {inj}/100, drift {drift}/100.")
+    return SemanticResult("heuristic", inj, inj_reasons, snippets, drift, drift_reasons, summary)
+
+
+def gemini_analyse(req: PaymentRequest, mandate: dict) -> SemanticResult | None:
+    """Gemini-only semantic audit. Returns None when Gemini is unavailable or fails."""
     prompt = (
         f"MANDATE (natural language): {mandate.get('natural_language')}\n"
         f"MANDATE (compiled): {mandate.get('guardrails')}\n\n"
@@ -136,18 +146,20 @@ def analyse(req: PaymentRequest, mandate: dict) -> SemanticResult:
         f"category={req.category}, cart={[i.model_dump() for i in req.cart]}"
     )
     out = generate_json(_SYSTEM, prompt, schema=_SCHEMA)
-    if out:
-        return SemanticResult(
-            engine="gemini",
-            injection_score=int(max(0, min(100, out.get("injection_score", 0)))),
-            injection_reasons=list(out.get("injection_reasons", []))[:6],
-            injected_instructions=list(out.get("injected_instructions", []))[:5],
-            drift_score=int(max(0, min(100, out.get("drift_score", 0)))),
-            drift_reasons=list(out.get("drift_reasons", []))[:6],
-            summary=str(out.get("summary", ""))[:600],
-        )
-    inj, inj_reasons, snippets = _heuristic_injection(req.consumed_content or "")
-    drift, drift_reasons = _heuristic_drift(req, mandate)
-    summary = "Heuristic audit: " + ("no steering signals found." if inj == 0 and drift == 0 else
-                                       f"injection {inj}/100, drift {drift}/100.")
-    return SemanticResult("heuristic", inj, inj_reasons, snippets, drift, drift_reasons, summary)
+    if not out:
+        return None
+    return SemanticResult(
+        engine="gemini",
+        injection_score=int(max(0, min(100, out.get("injection_score", 0)))),
+        injection_reasons=list(out.get("injection_reasons", []))[:6],
+        injected_instructions=list(out.get("injected_instructions", []))[:5],
+        drift_score=int(max(0, min(100, out.get("drift_score", 0)))),
+        drift_reasons=list(out.get("drift_reasons", []))[:6],
+        summary=str(out.get("summary", ""))[:600],
+    )
+
+
+def analyse(req: PaymentRequest, mandate: dict) -> SemanticResult:
+    """Production path: Gemini when available, deterministic heuristic otherwise.
+    The gateway never fails open or closed because a model is slow or absent."""
+    return gemini_analyse(req, mandate) or heuristic_analyse(req, mandate)
