@@ -135,8 +135,15 @@
       <div id="receiptList" class="list"></div>
     </div>
     <div class="card">
-      <h2>Receipt</h2>
-      <pre id="receiptView" class="mono small">select a receipt…</pre>
+      <h2>Receipt <span id="verifyBadge" class="badge muted">no receipt</span></h2>
+      <p class="hint">Edit any field below and re-verify. The signature is an HMAC over the canonical (sorted, whitespace-free) body, so <b>any</b> change breaks it — tampering is detectable offline, without trusting the gateway. This is the artifact a dispute is settled on.</p>
+      <textarea id="receiptView" class="mono small" rows="16" spellcheck="false">select a receipt…</textarea>
+      <div class="row">
+        <button id="verifyReceiptBtn" class="primary tiny">Verify signature</button>
+        <button id="tamperBtn" class="secondary tiny">Tamper the amount →</button>
+        <button id="resetReceiptBtn" class="secondary tiny">Reset to original</button>
+      </div>
+      <div id="verifyResult" class="verify-result"></div>
     </div>
   </div>
 </section>

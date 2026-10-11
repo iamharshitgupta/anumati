@@ -42,8 +42,26 @@ LIABILITY_HINTS = {
 }
 
 
+def _canonical_numbers(obj):
+    """Collapse integer-valued floats (2000.0 → 2000) so the canonical form is
+    stable across languages. Python emits ``2000.0`` where JavaScript's JSON
+    emits ``2000``; without this, a receipt signed here would fail to verify in
+    any non-Python verifier — defeating the "verifiable offline by any party"
+    guarantee. Genuinely fractional values are left untouched (their shortest
+    round-trip representation already agrees between Python and JS)."""
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, float) and obj.is_integer():
+        return int(obj)
+    if isinstance(obj, dict):
+        return {k: _canonical_numbers(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_canonical_numbers(v) for v in obj]
+    return obj
+
+
 def canonical(obj: dict) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return json.dumps(_canonical_numbers(obj), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def _sign(payload_hash: str) -> str:

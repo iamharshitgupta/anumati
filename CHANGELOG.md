@@ -4,6 +4,31 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.2.0] — Tamper-evident receipt verifier
+
+Makes PRD §8's "a tampered receipt fails verification **on stage**" a one-click
+demo, and fixes a correctness bug that quietly broke the receipt's core promise.
+
+### Console
+- New **interactive receipt verifier** in the Receipts tab. Opening a receipt
+  loads it into an editable panel and verifies it live (`signature valid ✅`).
+  Judges can edit any field by hand, hit **Verify signature**, and watch the
+  HMAC break; a one-click **Tamper the amount →** does it for them, and **Reset
+  to original** restores the signed copy. The result banner explains the outcome
+  in dispute terms ("a dispute party would reject it").
+
+### Receipts (correctness)
+- **Fixed cross-language canonicalisation.** The signed body contained
+  integer-valued floats (`2000.0`, `1041.0`); Python's `json.dumps` emits
+  `2000.0` where JavaScript's `JSON.stringify` emits `2000`, so a receipt signed
+  by the gateway **failed to verify in any non-Python verifier** (including the
+  browser console) — silently breaking the "verifiable offline by any party"
+  guarantee (PRD NFR §6). `canonical()` now normalises integer-valued floats to
+  integers before hashing, so the canonical form is identical across languages.
+  Signing and verification use the same normalisation, so the chain stays intact.
+- Added a regression test that re-serialises a receipt the way a browser would
+  (collapsing `2000.0 → 2000`) and asserts it still verifies.
+
 ## [0.1.1] — Review pass
 
 A correctness, honesty and hardening pass over the initial build. No feature was
