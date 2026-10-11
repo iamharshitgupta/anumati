@@ -81,7 +81,7 @@ tests/     pytest                              infra/    deploy.sh
 
 ## Documents
 
-- [Product Requirements](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Submission text](docs/SUBMISSION.md) · [Eval results](eval/RESULTS.md)
+- [Product Requirements](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Theme & rubric alignment](docs/THEME_ALIGNMENT.md) · [Submission text](docs/SUBMISSION.md) · [Eval results](eval/RESULTS.md)
 
 ## Honest scope
 
