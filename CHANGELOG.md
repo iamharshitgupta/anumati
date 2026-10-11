@@ -4,6 +4,19 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.2.1] — Theme & rubric alignment
+
+- Added `docs/THEME_ALIGNMENT.md`: validates Anumati against the AI Builder Cup
+  2026 BFSI track, the required technology (Gemini/Gemma + Cloud Run/Firebase),
+  and the judging rubric (Technical/Gen-AI 40%, Problem/Impact 25%, Innovation
+  25%, UX 10%), with an evidence map per criterion and an honest list of risks
+  (Gen-AI weighting, heuristic-vs-Gemini judged build, category label,
+  eligibility, repo visibility).
+- `docs/SUBMISSION.md`: corrected the repo-visibility note (private during the
+  build, make public before the deadline), added the judging criteria and
+  weights, and expanded the pre-submission checklist (Gemini build, category
+  label, eligibility).
+
 ## [0.2.0] — Tamper-evident receipt verifier
 
 Makes PRD §8's "a tampered receipt fails verification **on stage**" a one-click

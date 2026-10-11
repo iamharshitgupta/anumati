@@ -10,7 +10,9 @@ BFSI: Intelligent Risk, Fraud & Financial Experiences
 `https://anumati-api-<hash>-<region>.a.run.app` — API (`/docs`, `/healthz`)
 
 ## GitHub
-`https://github.com/iamharshitgupta/anumati` (public)
+`https://github.com/iamharshitgupta/anumati` — **private during the build; make
+public before the 18 Oct 2026 deadline** if the submission form requires a public
+link.
 
 ## Demo video
 ≤ 3:00 — see `DEMO_SCRIPT.md`.
@@ -34,10 +36,20 @@ Suggested slide mapping onto the template's sections:
 9. **Roadmap** — real AP2 VDC/UAP credential verification, I4C/FRI feeds, Cloud KMS signing, issuer tuning console, agent SDK.
 10. **Ask / contact**.
 
+## Judging criteria (weights) — see `THEME_ALIGNMENT.md` for the evidence map
+- **Technical Merit & Gen-AI implementation — 40%** (meaningful Gen AI; technical soundness; scalability)
+- **Problem Alignment & Impact — 25%** (theme fit; stakeholder value)
+- **Innovation & Creativity — 25%** (originality; non-superficial Gen AI)
+- **User Experience & Solution Design — 10%** (usability; cohesion)
+
+Required tech: **Gemini/Gemma** (or an agentic platform) + **Cloud Run or Firebase**. Anumati uses Gemini 2.5 Flash on both Cloud Run and Firebase.
+
 ## Pre-submission checklist
-- [ ] `healthz` returns `semantic_engine: gemini` on the deployed URL
+- [ ] `healthz` returns `semantic_engine: gemini` on the deployed URL (the 40% Gen-AI score is judged on the Gemini build, not the heuristic default)
 - [ ] Cloud Run `min-instances=1`; budget alert set
 - [ ] Firebase config pasted; step-up toast works in a fresh incognito window
-- [ ] Repo public; README renders; `eval/RESULTS.md` committed from a Gemini run
+- [ ] Repo made **public** before the deadline; README renders; `eval/RESULTS.md` committed from a Gemini run
+- [ ] Confirm the "Category Specification" label (Healthcare/Education/Sustainability/Accessibility/Social Good) that applies to a BFSI entry
+- [ ] Confirm eligibility: working professionals only, 21+, JAPAC, team of 2–4
 - [ ] Video ≤ 3:00, public link, plays without login
 - [ ] Deck exported from the official template as PDF ≤ 5 MB
