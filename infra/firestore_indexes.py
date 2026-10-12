@@ -12,6 +12,7 @@ The first command previews definitions offline without credentials or cloud
 calls. The second uses Application Default Credentials (ADC) to create only
 missing indexes and wait until all declared indexes are READY. Existing indexes,
 including builds already in progress, are skipped; no indexes are deleted.
+Existing indexes are matched only within the requested database and collection.
 Builds can take several minutes. --timeout controls the readiness wait in
 seconds (default: 600); a timeout does not cancel builds, and rerunning is safe.
 
@@ -104,7 +105,10 @@ def describe_index(collection: str, index: Index) -> str:
 
 def list_existing(client: FirestoreAdminClient, database_path: str, collection: str) -> dict:
     parent = f"{database_path}/collectionGroups/{collection}"
-    return {index_key(index): index for index in client.list_indexes(parent=parent, timeout=30)}
+    # Responses can include other collection groups with identical field layouts.
+    prefix = f"{parent}/indexes/"
+    return {index_key(index): index for index in client.list_indexes(parent=parent, timeout=30)
+            if index.name.startswith(prefix)}
 
 
 def wait_until_ready(client: FirestoreAdminClient, database_path: str, indexes: list, timeout: float) -> None:

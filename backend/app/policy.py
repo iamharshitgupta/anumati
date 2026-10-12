@@ -106,6 +106,8 @@ def run_policy(req: PaymentRequest, mandate: dict, store: BaseStore) -> tuple[li
     # 4. velocity / period cap ---------------------------------------------
     since = _period_start(g.period, now).isoformat()
     prior = store.query("decisions", [("request.mandate_id", "==", req.mandate_id)])
+    # Partition legacy mixed history as well as new requests by execution mode.
+    prior = [d for d in prior if d.get("request", {}).get("simulated", False) == req.simulated]
     settled = [d for d in prior if d.get("status") in {"final", "settled"} and d.get("verdict") == "APPROVE"
                and d.get("created_at", "") >= since and not d.get("request", {}).get("simulated_discard")]
     spent = sum(d["request"]["amount"] for d in settled)

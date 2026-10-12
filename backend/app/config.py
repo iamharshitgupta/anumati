@@ -17,6 +17,10 @@ def _bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
+    # Explicit local demo access; production always requires Firebase tokens.
+    auth_mode: str = os.getenv("ANUMATI_AUTH_MODE", "firebase")
+    environment: str = os.getenv("ANUMATI_ENV", "local")
+
     # --- storage -------------------------------------------------------
     # "firestore" on Cloud Run, "memory" for local demos/tests.
     store_backend: str = os.getenv("ANUMATI_STORE", "memory")

@@ -1,34 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // All WRITES go through the Cloud Run API (Admin SDK), never from the browser —
-    // every rule below is `allow write: if false`. That invariant holds in both the
-    // demo and production rulesets.
-    //
-    // READS: this is the single-tenant hackathon demo. The console signs in with
-    // anonymous auth and all synthetic data belongs to the one demo user, so reads are
-    // gated only on `signedIn()`. ⚠️ This means any authenticated client can read every
-    // document in these collections — acceptable ONLY because the data is synthetic and
-    // single-user. For a multi-tenant deployment, delete the demo block and uncomment the
-    // production block, which scopes each read to the document's owner. (That requires the
-    // API to stamp `user_id` with the caller's real auth uid instead of the demo id.)
+    // Browser realtime reads are owner-only, including staff. Cross-account
+    // staff reads go through the API's revoked-session checks, not cached claims.
+    // Server SDK writes bypass these rules; browser writes stay denied.
     function signedIn() { return request.auth != null; }
-    function owns(doc) { return signedIn() && request.auth.uid == doc.data.user_id; }
-
-    // ---- DEMO (single-tenant, synthetic data) --------------------------------
-    match /stepups/{id}   { allow read: if signedIn(); allow write: if false; }
-    match /decisions/{id} { allow read: if signedIn(); allow write: if false; }
-    match /receipts/{id}  { allow read: if signedIn(); allow write: if false; }
-    match /mandates/{id}  { allow read: if signedIn(); allow write: if false; }
-    match /disputes/{id}  { allow read: if signedIn(); allow write: if false; }
-
-    // ---- PRODUCTION (per-user scoping) — uncomment and remove the demo block above
-    // match /stepups/{id}   { allow read: if owns(resource); allow write: if false; }
-    // match /decisions/{id} { allow read: if signedIn() && request.auth.uid == resource.data.request.user_id; allow write: if false; }
-    // match /receipts/{id}  { allow read: if owns(resource); allow write: if false; }
-    // match /mandates/{id}  { allow read: if owns(resource); allow write: if false; }
-    // match /disputes/{id}  { allow read: if signedIn(); allow write: if false; } // scope by case membership
-
-    match /{other=**}     { allow read, write: if false; }
+    function owns(doc) {
+      return signedIn() && request.auth.uid == doc.data.get('user_id', '');
+    }
+    match /mandates/{id} { allow read: if owns(resource); allow write: if false; }
+    match /receipts/{id} { allow read: if owns(resource); allow write: if false; }
+    match /stepups/{id}  { allow read: if owns(resource); allow write: if false; }
+    match /disputes/{id} { allow read: if owns(resource); allow write: if false; }
+    match /decisions/{id} {
+      allow read: if signedIn() && request.auth.uid == resource.data.request.user_id;
+      allow write: if false;
+    }
+    match /{other=**} { allow read, write: if false; }
   }
 }

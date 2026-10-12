@@ -7,15 +7,19 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const inr = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 // ---------------------------------------------------------------- API base
-const stored = localStorage.getItem("anumati.api");
-let API = stored ?? (window.ANUMATI_API_BASE || (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:" ? "http://localhost:8080" : ""));
+const localConsole = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+const stored = localConsole ? localStorage.getItem("anumati.api") : null;
+let API = stored ?? (window.ANUMATI_API_BASE || (localConsole ? "http://localhost:8080" : ""));
 $("#apiBase").value = API;
+$("#apiBase").readOnly = !localConsole;
 $("#apiBase").addEventListener("change", (e) => { API = e.target.value.replace(/\/$/, ""); localStorage.setItem("anumati.api", API); boot(); });
 
 async function api(path, opts = {}) {
-  const r = await fetch(API + path, { headers: { "content-type": "application/json" }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-  return r.json();
+  const caller = identity, base = API;
+  const { requestJSON } = await import("./auth.js");
+  const result = await requestJSON(base, path, opts, caller);
+  if (caller !== identity || base !== API) throw new Error("Connection changed; reload this view.");
+  return result;
 }
 function toast(html) { const t = document.createElement("div"); t.className = "toast"; t.innerHTML = html; document.body.appendChild(t); setTimeout(() => t.remove(), 6000); }
 
@@ -28,17 +32,124 @@ document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("
 
 // ---------------------------------------------------------------- state
 let scenarios = [], scenario = "clean", mandates = [], lastRun = null;
-const DEMO_USER = "user_demo";
+let DEMO_USER = "user_demo", identity = null, storeBackend = null, pollingTimer = null, unsubscribeRealtime = [];
+let unsubscribeAuth = null, sessionVersion = 0;
+let signInRecovery = null;
+const isStaff = () => identity && ["analyst", "admin"].includes(identity.role);
+
+function stopRealtime() {
+  unsubscribeRealtime.forEach((stop) => stop()); unsubscribeRealtime = [];
+  clearInterval(pollingTimer); pollingTimer = null;
+}
+
+function setReady(ready) {
+  document.querySelectorAll("#runBtn,#compareBtn,#guidedBtn,#compileBtn,#signBtn,#chainBtn,#disputeBtn,#verifyReceiptBtn,#resetReceiptBtn,#tamperBtn,#newDemoSessionBtn").forEach((b) => { b.disabled = !ready; });
+}
+
+function clearSession() {
+  sessionVersion++;
+  unsubscribeAuth?.(); unsubscribeAuth = null;
+  stopRealtime(); setReady(false); identity = null; draft = null; lastRun = null; mandates = []; storeBackend = null;
+  DEMO_USER = ""; $("#mUser").value = "";
+  $("#mandateText").value = $("#mandateText").defaultValue;
+  signInRecovery = null;
+  $("#apiBase").disabled = true; $("#signInBtn").disabled = true; $("#signOutBtn").hidden = true;
+  $("#newDemoSessionBtn").hidden = true;
+  $("#identityBadge").textContent = "auth: connecting"; $("#identityBadge").title = "";
+  ["#mandateList", "#sandboxMandate", "#stepupList", "#feed", "#receiptList", "#disputeList", "#disputeView"].forEach((s) => { $(s).innerHTML = ""; });
+  ["#findings", "#trace", "#attempt", "#evidenceChain", "#baselineComparison", "#compareGrid", "#compareVerdictNote"].forEach((s) => { $(s).innerHTML = ""; });
+  $("#compareCard").hidden = true; $("#stepupOutcome").hidden = true;
+  $("#receiptView").value = ""; $("#result").hidden = true; $("#compiled").hidden = true;
+  openReceiptJson = null; $("#verifyResult").innerHTML = ""; $("#chainResult").textContent = "";
+  $("#dDecision").value = ""; $("#dClaim").value = ""; $("#suCount").textContent = "0";
+  demoExit();
+}
+
+function enableSignInRecovery(health) {
+  const config = window.ANUMATI_FIREBASE || {};
+  if (health?.auth_mode !== "firebase" || !config.apiKey || !config.projectId || config.projectId !== health.firebase_project_id) return;
+  signInRecovery = health;
+  $("#signInBtn").disabled = false;
+}
 
 async function boot() {
+  clearSession();
+  const version = sessionVersion;
+  let h;
   try {
-    const h = await api("/healthz");
+    h = await api("/healthz");
+    if (version !== sessionVersion) return;
     $("#engineBadge").textContent = `semantic: ${h.semantic_engine}${h.model ? " · " + h.model : ""} · store: ${h.store}`;
     $("#engineBadge").className = "badge " + (h.semantic_engine === "gemini" ? "ok" : "");
-  } catch (e) { $("#engineBadge").textContent = "API unreachable"; $("#engineBadge").className = "badge"; return; }
-  scenarios = await api("/sim/scenarios");
-  renderScenarios(); await loadMandates(); showMerchant(); refresh("stepups"); refresh("feed");
+    const { authenticate } = await import("./auth.js");
+    const caller = await authenticate(h, window.ANUMATI_FIREBASE || {});
+    if (version !== sessionVersion) return;
+    identity = caller; storeBackend = h.store;
+    unsubscribeAuth = caller.onAccountChange?.(() => {
+      if (identity !== caller) return;
+      clearSession();
+      enableSignInRecovery(h);
+      $("#identityBadge").textContent = "auth: session changed";
+      $("#apiBase").disabled = false;
+      toast("Sign-in session changed in another tab.");
+    }) || null;
+    DEMO_USER = identity.uid;
+    $("#identityBadge").textContent = identity.mode === "demo" ? "auth: local demo" : `${identity.role} · ${identity.uid.slice(0, 8)}`;
+    $("#identityBadge").title = `UID: ${identity.uid}`;
+    $("#mUser").value = DEMO_USER; $("#mUser").readOnly = true;
+    $("#signInBtn").disabled = identity.mode !== "firebase";
+    $("#signOutBtn").hidden = identity.mode !== "firebase" || identity.isAnonymous;
+    $("#newDemoSessionBtn").hidden = identity.mode !== "firebase" || !identity.isAnonymous;
+    await api("/sim/session", { method: "POST" });
+    scenarios = await api("/sim/scenarios");
+    renderScenarios(); await loadMandates(); await showMerchant(); await loadStepups(); await loadFeed();
+    await realtime();
+    if (version === sessionVersion) setReady(true);
+  } catch (e) {
+    if (version !== sessionVersion) return;
+    clearSession(); $("#identityBadge").textContent = "auth: unavailable";
+    enableSignInRecovery(h);
+    $("#apiBase").disabled = false;
+    toast(`<b>Console setup failed</b><br>${esc(e.message)}`);
+  } finally { if (version === sessionVersion) $("#apiBase").disabled = false; }
 }
+
+$("#signInBtn").onclick = async () => {
+  const caller = identity;
+  const recovery = signInRecovery;
+  if (caller?.mode !== "firebase" && !recovery) return;
+  try {
+    if (caller?.mode === "firebase") await caller.signInWithGoogle();
+    else {
+      const { signInWithGoogle } = await import("./auth.js");
+      await signInWithGoogle(recovery, window.ANUMATI_FIREBASE || {});
+    }
+    await boot();
+  }
+  catch (e) { toast(`<b>Sign-in failed</b><br>${esc(e.message)}`); }
+};
+
+async function signOutAndBoot(caller) {
+  clearSession();
+  await caller.signOut();
+  await boot();
+}
+
+$("#signOutBtn").onclick = async () => {
+  const caller = identity;
+  if (caller?.mode !== "firebase") return;
+  try { await signOutAndBoot(caller); }
+  catch (e) { $("#identityBadge").textContent = "auth: unavailable"; toast(`<b>Sign-out failed</b><br>${esc(e.message)}`); }
+};
+
+$("#newDemoSessionBtn").onclick = async () => {
+  const caller = identity;
+  if (caller?.mode !== "firebase" || !caller.isAnonymous) return;
+  const confirmed = window.confirm("Start a new demo session?\n\nYour current records will stay saved under the old visitor UID, but you will lose access to them from this anonymous session. The old account and its records will not be disabled or deleted.\n\nThis changes the sign-in session in other tabs in this browser too.");
+  if (!confirmed || caller !== identity) return;
+  try { await signOutAndBoot(caller); }
+  catch (e) { $("#identityBadge").textContent = "auth: unavailable"; toast(`<b>New demo session failed</b><br>${esc(e.message)}`); }
+};
 
 // ---------------------------------------------------------------- sandbox
 function renderScenarios() {
@@ -184,8 +295,8 @@ function renderBaselineComparison(run, decision) {
 
 // ---------------------------------------------------------------- mandates
 async function loadMandates() {
-  mandates = await api(`/v1/mandates?user_id=${DEMO_USER}`);
-  $("#sandboxMandate").innerHTML = mandates.filter((m) => m.status === "active").map((m) => `<option value="${m.id}">${m.id} — ${esc(m.natural_language.slice(0, 60))}…</option>`).join("");
+  mandates = await api(`/v1/mandates?user_id=${encodeURIComponent(DEMO_USER)}`);
+  $("#sandboxMandate").innerHTML = mandates.filter((m) => m.status === "active" && m.demo_fixture).map((m) => `<option value="${m.id}">${m.id} — ${esc(m.natural_language.slice(0, 60))}…</option>`).join("");
   $("#mandateList").innerHTML = mandates.map((m) => `
     <div class="item"><div><span class="tag ${m.status}">${m.status}</span> <b>${inr(m.guardrails.per_txn_cap)}/txn · ${inr(m.guardrails.period_cap)}/${m.guardrails.period}</b>
       <div>${esc(m.natural_language)}</div>
@@ -197,7 +308,7 @@ let draft = null;
 $("#compileBtn").addEventListener("click", async () => {
   const btn = $("#compileBtn"); btn.disabled = true;
   try {
-    draft = await api("/v1/mandates/compile", { method: "POST", body: { user_id: $("#mUser").value, agent_id: $("#mAgent").value, text: $("#mandateText").value, ttl_days: Number($("#mTtl").value) } });
+    draft = await api("/v1/mandates/compile", { method: "POST", body: { user_id: $("#mUser").value, agent_id: $("#mAgent").value, text: $("#mandateText").value, ttl_days: Number($("#mTtl").value), sandbox: true } });
     $("#compiled").hidden = false; $("#compilerBadge").textContent = draft.compiler;
     $("#guardrails").textContent = JSON.stringify(draft.guardrails, null, 2);
     $("#compilerNotes").innerHTML = draft.compiler_notes.map((n) => `<li>${esc(n)}</li>`).join("");
@@ -212,7 +323,9 @@ $("#signBtn").addEventListener("click", async () => {
 
 // ---------------------------------------------------------------- step-ups
 async function loadStepups(rows) {
-  rows = rows || await api(`/v1/stepups?user_id=${DEMO_USER}&status=pending`);
+  const caller = identity;
+  if (!caller) return;
+  rows = rows || await api(`/v1/stepups?user_id=${encodeURIComponent(DEMO_USER)}&status=pending`);
   $("#suCount").textContent = rows.length;
   const enriched = await Promise.all(rows.map(async (stepup) => {
     try {
@@ -222,6 +335,7 @@ async function loadStepups(rows) {
       return { stepup, decision, mandate };
     } catch { return { stepup, decision: null, mandate: null }; }
   }));
+  if (caller !== identity) return;
   $("#stepupList").innerHTML = enriched.length ? enriched.map(({ stepup, decision, mandate }) => {
     const guardrails = mandate?.guardrails || {};
     const rule = guardrails.step_up_above && stepup.amount > guardrails.step_up_above
@@ -258,7 +372,7 @@ async function loadStepups(rows) {
 
 // ---------------------------------------------------------------- feed / receipts / disputes
 async function loadFeed(rows) {
-  rows = rows || await api(`/v1/decisions?user_id=${DEMO_USER}&limit=40`);
+  rows = rows || await api(`/v1/decisions?user_id=${encodeURIComponent(DEMO_USER)}&limit=40`);
   $("#feed").innerHTML = rows.map((d) => `
     <div class="item"><div><span class="tag ${d.verdict}">${d.verdict}</span> <b>${inr(d.request.amount)}</b> → ${esc(d.request.payee_name)} <span class="meta">&lt;${esc(d.request.payee_vpa)}&gt;</span> · risk ${d.risk_score}
       ${d.request.scenario ? `<span class="tag">${esc(d.request.scenario)}</span>` : ""} <span class="tag">${d.status}</span>
@@ -329,8 +443,14 @@ function renderDispute(d) {
     <h4>Unresolved</h4><ul>${(a.unresolved || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>—</li>"}</ul>
     <h4>Evidence needed</h4><ul>${(a.evidence_needed || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>—</li>"}</ul>
     <h4>Replay</h4><pre class="mono small">${esc(JSON.stringify(d.replay, null, 2))}</pre>
-    <div class="row"><button class="primary tiny" id="resolveBtn">Close case with this attribution</button></div></div>`;
-  $("#resolveBtn").onclick = async () => { await api(`/v1/disputes/${d.id}/resolve`, { method: "POST", body: { resolution: "closed per attribution memo", party: a.primary_party } }); toast(`<b>Dispute ${d.id} resolved</b>`); loadDisputes(); };
+    ${isStaff() || d.sandbox ? `<div class="row"><button class="primary tiny" id="resolveBtn">${d.sandbox && !isStaff() ? "Close simulated case" : "Close case with this attribution"}</button></div>` : ""}</div>`;
+  if ($("#resolveBtn")) $("#resolveBtn").onclick = async () => {
+    try {
+      const prefix = d.sandbox && !isStaff() ? "/sim" : "/v1";
+      await api(`${prefix}/disputes/${d.id}/resolve`, { method: "POST", body: { resolution: "closed per attribution memo", party: a.primary_party } });
+      toast(`<b>Dispute ${d.id} resolved${prefix === "/sim" ? " (simulated)" : ""}</b>`); loadDisputes();
+    } catch (e) { toast(`<b>Resolution failed</b><br>${esc(e.message)}`); }
+  };
 }
 async function loadDisputes() {
   const rows = await api("/v1/disputes");
@@ -340,6 +460,7 @@ async function loadDisputes() {
 }
 
 function refresh(tab) {
+  if (!identity) return;
   if (tab === "stepups") loadStepups().catch(() => {});
   if (tab === "feed") loadFeed().catch(() => {});
   if (tab === "receipts") loadReceipts().catch(() => {});
@@ -349,19 +470,26 @@ function refresh(tab) {
 
 // ---------------------------------------------------------------- realtime (Firestore) or polling
 async function realtime() {
-  const cfg = window.ANUMATI_FIREBASE || {};
-  if (!cfg.apiKey) { setInterval(() => { loadStepups().catch(() => {}); }, 4000); return; }
+  const caller = identity;
+  if (!caller) return;
+  const poll = () => {
+    if (identity !== caller) return;
+    stopRealtime();
+    $("#rtBadge").textContent = "realtime: polling"; $("#rtBadge").className = "badge muted";
+    pollingTimer = setInterval(() => { loadStepups().catch(() => {}); loadFeed().catch(() => {}); }, 4000);
+  };
+  if (caller.mode !== "firebase" || storeBackend !== "firestore") { poll(); return; }
   try {
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, signInAnonymously } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
     const { getFirestore, collection, query, where, orderBy, onSnapshot, limit } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    const app = initializeApp(cfg); await signInAnonymously(getAuth(app)); const db = getFirestore(app);
-    onSnapshot(query(collection(db, "stepups"), where("user_id", "==", DEMO_USER), where("status", "==", "pending"), orderBy("created_at", "desc")),
-      (snap) => { const rows = snap.docs.map((d) => d.data()); loadStepups(rows); if (snap.docChanges().some((c) => c.type === "added")) toast(`<b>Confirmation needed</b><br>An agent payment is waiting for your one-tap approval.`); });
-    onSnapshot(query(collection(db, "decisions"), where("request.user_id", "==", DEMO_USER), orderBy("created_at", "desc"), limit(40)),
-      (snap) => loadFeed(snap.docs.map((d) => d.data())));
+    if (identity !== caller) return;
+    const db = getFirestore(caller.app);
+    const failed = (e) => { if (identity !== caller) return; console.warn("Firestore realtime unavailable; using authenticated API polling", e.code); poll(); };
+    unsubscribeRealtime.push(onSnapshot(query(collection(db, "stepups"), where("user_id", "==", DEMO_USER), where("status", "==", "pending"), orderBy("created_at", "desc")),
+      (snap) => { if (identity !== caller) return; const rows = snap.docs.map((d) => d.data()); loadStepups(rows); if (snap.docChanges().some((c) => c.type === "added")) toast(`<b>Confirmation needed</b><br>An agent payment is waiting for your one-tap approval.`); }, failed));
+    unsubscribeRealtime.push(onSnapshot(query(collection(db, "decisions"), where("request.user_id", "==", DEMO_USER), orderBy("created_at", "desc"), limit(40)),
+      (snap) => { if (identity === caller) loadFeed(snap.docs.map((d) => d.data())); }, failed));
     $("#rtBadge").textContent = "realtime: Firestore"; $("#rtBadge").className = "badge ok";
-  } catch (e) { console.warn("Firestore realtime unavailable, polling", e); setInterval(() => { loadStepups().catch(() => {}); }, 4000); }
+  } catch (e) { console.warn("Firestore realtime unavailable; using authenticated API polling", e.code); poll(); }
 }
 
 // ---------------------------------------------------------------- guided demo walkthrough
@@ -375,7 +503,7 @@ function demoHighlight(sel) {
 }
 async function demoRunScenario(key) {
   scenario = key; renderScenarios(); await showMerchant();
-  lastRun = await api("/sim/run", { method: "POST", body: { mandate_id: $("#sandboxMandate").value, scenario: key, mode: "naive" } });
+  lastRun = await api("/sim/run", { method: "POST", body: { mandate_id: $("#sandboxMandate").value, scenario: key, mode: "naive", fresh: key === "clean" } });
   renderResult(lastRun); refresh("feed");
   return lastRun.decisions[lastRun.decisions.length - 1];
 }
@@ -452,4 +580,4 @@ $("#demoPlay").addEventListener("click", () => {
   else clearTimeout(demo.timer);
 });
 
-boot().then(realtime);
+boot();

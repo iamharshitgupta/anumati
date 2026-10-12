@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
+from .auth import Caller, require_role, validate_auth_configuration
 from .config import settings
 from .gemini import engine_name
 from .routers import agents, decisions, disputes, mandates, sim, stepups
@@ -18,6 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_auth_configuration()
     if settings.seed_on_start:
         info = seed(get_store())
         logging.getLogger("anumati").info("seeded demo data: %s", info)
@@ -38,12 +40,14 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_me
 
 for r in (mandates, agents, decisions, stepups, disputes, sim):
     app.include_router(r.router)
+app.include_router(sim.public_router)
 
 
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "version": __version__, "store": settings.store_backend, "semantic_engine": engine_name(),
-            "model": settings.gemini_model if engine_name() == "gemini" else None}
+            "model": settings.gemini_model if engine_name() == "gemini" else None, "auth_mode": settings.auth_mode,
+            "firebase_project_id": settings.gcp_project if settings.auth_mode == "firebase" else None}
 
 
 @app.get("/")
@@ -52,5 +56,6 @@ def root():
 
 
 @app.post("/admin/seed")
-def reseed():
+def reseed(caller: Caller):
+    require_role(caller, "admin")
     return seed(get_store())

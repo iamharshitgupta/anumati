@@ -7,6 +7,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 os.environ["ANUMATI_STORE"] = "memory"
 os.environ["ANUMATI_GEMINI"] = "false"
 os.environ["ANUMATI_SEED"] = "false"
+os.environ["ANUMATI_AUTH_MODE"] = "demo"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -138,14 +139,14 @@ def test_stepup_flow_and_dispute(client):
 
 def test_unregistered_agent_is_hard_blocked(client):
     body = {"agent_id": "rogue", "mandate_id": DEMO_MANDATE_ID, "user_id": "user_demo", "payee_vpa": "freshkart@okaxis",
-            "payee_name": "FreshKart", "merchant": "FreshKart", "amount": 100}
+            "payee_name": "FreshKart", "merchant": "FreshKart", "amount": 100, "simulated": True}
     r = client.post("/v1/payments/authorize", json=body).json()
     assert r["verdict"] == "BLOCK" and any(f["code"] == "AGENT_UNREGISTERED" for f in r["findings"])
 
 
 def test_idempotency(client):
     body = {"agent_id": "kiranabot", "mandate_id": DEMO_MANDATE_ID, "user_id": "user_demo", "payee_vpa": "freshkart@okaxis",
-            "payee_name": "FreshKart", "merchant": "FreshKart", "amount": 400, "idempotency_key": "k1"}
+            "payee_name": "FreshKart", "merchant": "FreshKart", "amount": 400, "idempotency_key": "k1", "simulated": True}
     a = client.post("/v1/payments/authorize", json=body).json()
     b = client.post("/v1/payments/authorize", json=body).json()
     assert a["id"] == b["id"]
