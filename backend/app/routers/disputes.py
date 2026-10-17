@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 
+from ..auth import Caller, require_owner, require_role, scoped_user
 from ..gemini import generate_json
 from ..models import DisputeCreate
 from ..receipts import LIABILITY_HINTS, verify_signature
@@ -62,11 +63,21 @@ def _heuristic_attribution(receipt: dict, claim: str) -> dict:
 
 
 @router.post("")
-def create_dispute(body: DisputeCreate):
+def create_dispute(body: DisputeCreate, caller: Caller):
     store = get_store()
+    if not isinstance(body.decision_id, str) or not body.decision_id or "/" in body.decision_id:
+        raise HTTPException(422, "A valid decision_id is required")
     dec = store.get("decisions", body.decision_id)
     if not dec:
         raise HTTPException(404, "decision not found")
+    user_id = dec.get("request", {}).get("user_id")
+    require_owner(caller, user_id, staff_read=True)
+    mandate_id = dec.get("request", {}).get("mandate_id")
+    mandate = store.get("mandates", mandate_id) if mandate_id else None
+    simulated = bool(dec.get("request", {}).get("simulated"))
+    sandbox = bool(simulated and mandate and mandate.get("demo_fixture"))
+    if not caller.is_staff and not sandbox and body.raised_by != "user":
+        raise HTTPException(403, "Only staff can raise a dispute for another party")
     rc = store.get("receipts", dec["receipt_id"])
     if not rc:
         raise HTTPException(404, "receipt not found")
@@ -76,6 +87,8 @@ def create_dispute(body: DisputeCreate):
     attribution = {**out, "engine": "gemini"} if out else _heuristic_attribution(rc, body.claim)
     did = f"dsp_{uuid.uuid4().hex[:10]}"
     d = {
+        "user_id": user_id, "raised_by_uid": caller.uid, "mandate_id": mandate_id,
+        "simulated": simulated, "sandbox": sandbox,
         "decision_id": body.decision_id, "receipt_id": rc["id"], "raised_by": body.raised_by, "claim": body.claim,
         "receipt_signature_valid": sig_ok, "attribution": attribution, "status": "open", "created_at": utcnow_iso(),
         "replay": {
@@ -90,24 +103,42 @@ def create_dispute(body: DisputeCreate):
 
 
 @router.get("")
-def list_disputes(limit: int = 50):
-    return get_store().query("disputes", order_by="created_at", descending=True, limit=limit)
+def list_disputes(caller: Caller, limit: int = 50):
+    user_id = scoped_user(caller)
+    filters = [("user_id", "==", user_id)] if user_id else []
+    return get_store().query("disputes", filters, order_by="created_at", descending=True, limit=limit)
 
 
 @router.get("/{dispute_id}")
-def get_dispute(dispute_id: str):
+def get_dispute(dispute_id: str, caller: Caller):
     d = get_store().get("disputes", dispute_id)
     if not d:
         raise HTTPException(404, "dispute not found")
+    require_owner(caller, d.get("user_id"), staff_read=True)
     return d
 
 
 @router.post("/{dispute_id}/resolve")
-def resolve(dispute_id: str, body: dict):
+def resolve(dispute_id: str, body: dict, caller: Caller):
+    require_role(caller, "analyst", "admin")
+    return resolve_record(dispute_id, body, caller)
+
+
+def resolve_record(dispute_id: str, body: dict, caller: Caller, *, sandbox: bool = False):
     store = get_store()
     d = store.get("disputes", dispute_id)
     if not d:
         raise HTTPException(404, "dispute not found")
+    if sandbox:
+        require_owner(caller, d.get("user_id"))
+        mandate = store.get("mandates", d.get("mandate_id", "")) if d.get("mandate_id") else None
+        if not (d.get("sandbox") and d.get("simulated") and mandate and mandate.get("demo_fixture")):
+            raise HTTPException(403, "Sandbox resolution requires a synthetic demo fixture")
+        require_owner(caller, mandate.get("user_id"))
+    else:
+        require_role(caller, "analyst", "admin")
     store.update("disputes", dispute_id, {"status": "resolved", "resolution": body.get("resolution"),
-                                          "resolved_party": body.get("party"), "resolved_at": utcnow_iso()})
+                                          "resolved_party": body.get("party"), "resolved_at": utcnow_iso(),
+                                          "resolved_by": caller.uid,
+                                          "resolution_scope": "sandbox" if sandbox else "staff"})
     return store.get("disputes", dispute_id)

@@ -28,7 +28,7 @@ realtime step-up listeners), **Secret Manager** (signing + model keys).
 
 > **Submission gate:** the 40%-weighted Gen-AI criterion is judged on the
 > *deployed* build, so it must run with `GOOGLE_API_KEY` set (or `USE_VERTEX=1`)
-> — `healthz` must report `semantic_engine: gemini`, and `eval/RESULTS.md` must
+> — `status` must report `semantic_engine: gemini`, and `eval/RESULTS.md` must
 > be committed from a Gemini run, not the heuristic default used for local dev.
 
 ## Judging rubric — how we score

@@ -5,9 +5,11 @@ Fill the form fields from here. Deadline **18 Oct 2026, 11:59 PM IST**.
 ## Challenge
 BFSI: Intelligent Risk, Fraud & Financial Experiences
 
-## Prototype link (Cloud Run / Firebase Hosting)
-`https://<project>.web.app` — console (proxies the API)
-`https://anumati-api-<hash>-<region>.a.run.app` — API (`/docs`, `/healthz`)
+## Prototype link (Cloud Run / Firebase Hosting) — LIVE
+- **Console:** https://anumati-511908.web.app (anonymous sign-in; proxies the API)
+- **API:** https://anumati-api-227794455624.asia-south1.run.app — `/docs`, `/status`
+- `/status` reports `semantic_engine: gemini` (`gemini-2.5-flash` via Vertex AI),
+  `store: firestore`, `auth_mode: firebase` — the Gen-AI build judges score on.
 
 ## GitHub
 `https://github.com/iamharshitgupta/anumati` — **private during the build; make
@@ -45,7 +47,7 @@ Suggested slide mapping onto the template's sections:
 Required tech: **Gemini/Gemma** (or an agentic platform) + **Cloud Run or Firebase**. Anumati uses Gemini 2.5 Flash on both Cloud Run and Firebase.
 
 ## Pre-submission checklist
-- [ ] `healthz` returns `semantic_engine: gemini` on the deployed URL (the 40% Gen-AI score is judged on the Gemini build, not the heuristic default)
+- [ ] `status` returns `semantic_engine: gemini` on the deployed URL (the 40% Gen-AI score is judged on the Gemini build, not the heuristic default)
 - [ ] Cloud Run `min-instances=1`; budget alert set
 - [ ] Firebase config pasted; step-up toast works in a fresh incognito window
 - [ ] Repo made **public** before the deadline; README renders; `eval/RESULTS.md` committed from a Gemini run

@@ -32,9 +32,13 @@ AI Builder Cup 2026 · BFSI: Intelligent Risk, Fraud & Financial Experiences
 
 ```bash
 cd backend && pip install -r requirements.txt
-uvicorn app.main:app --port 8080            # in-memory store, heuristic semantics
-# GOOGLE_API_KEY=... uvicorn app.main:app --port 8080   # with Gemini
+ANUMATI_STORE=memory ANUMATI_GEMINI=false uvicorn app.main:app --port 8080   # in-memory store, heuristic semantics
+# For Firebase identity or Gemini/Firestore setup, see docs/AUTH.md.
 ```
+The local in-memory build runs no-login by default: the sandbox just works, scoped
+to the synthetic demo user, loopback-only. Any deployed or Firestore-backed run
+switches to Firebase automatically and requires a verified ID token. Console-created
+mandates are synthetic; direct payment requests against them must set `simulated: true`.
 Open the console: `cd web && python3 -m http.server 5173` → http://localhost:5173 (it points at `http://localhost:8080` by default). Click **▶ Guided demo** to auto-run the whole story (mandate → approve → block → step-up decline → dispute → tamper-proof receipt) with narration.
 
 Try an attack from the shell:
@@ -55,7 +59,7 @@ python eval/run_eval.py          # writes eval/RESULTS.md
 PROJECT=<gcp-project> REGION=asia-south1 GOOGLE_API_KEY=<gemini key> ./infra/deploy.sh
 #   or: USE_VERTEX=1 PROJECT=<gcp-project> ./infra/deploy.sh
 ```
-The script enables APIs, creates Firestore, stores secrets, deploys Cloud Run from source, deploys Firestore rules/indexes and Firebase Hosting, and prints both URLs. Paste your Firebase web config into `web/firebase-config.js` and redeploy hosting to turn on realtime step-ups.
+The script enables APIs, creates Firestore, stores secrets, deploys Cloud Run from source, deploys Firestore rules/indexes and Firebase Hosting, and prints both URLs. Before deploying, configure `web/firebase-config.js` and enable Firebase Anonymous Auth (Google for identified/team accounts). Deployed protected APIs require Firebase ID tokens. Tokens go only to the console origin or the source-configured API origin, never an arbitrary address entered in the console. See [auth setup and behaviour changes](docs/AUTH.md).
 
 ## API surface
 
@@ -82,7 +86,7 @@ tests/     pytest                              infra/    deploy.sh
 
 ## Documents
 
-- [Product Requirements](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Theme & rubric alignment](docs/THEME_ALIGNMENT.md) · [Submission text](docs/SUBMISSION.md) · [Eval results](eval/RESULTS.md)
+- [Product Requirements](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Authentication](docs/AUTH.md) · [Theme & rubric alignment](docs/THEME_ALIGNMENT.md) · [Submission text](docs/SUBMISSION.md) · [Eval results](eval/RESULTS.md)
 
 ## Honest scope
 
@@ -96,8 +100,8 @@ Requires Python 3.12+ and (optionally) the `firebase` CLI for deploys.
 # backend
 python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt pytest
-cd backend && ../.venv/bin/python -m uvicorn app.main:app --port 8080     # heuristic engine
-# with Gemini:  GOOGLE_API_KEY=... ../.venv/bin/python -m uvicorn app.main:app --port 8080
+cd backend && ANUMATI_STORE=memory ANUMATI_GEMINI=false ../.venv/bin/python -m uvicorn app.main:app --port 8080   # no-login local demo
+# For Firebase identity or Gemini/Firestore setup, see docs/AUTH.md.
 
 # console (separate shell) — points at http://localhost:8080 by default
 cd web && python3 -m http.server 5173     # open http://localhost:5173
@@ -109,7 +113,9 @@ cd web && python3 -m http.server 5173     # open http://localhost:5173
 ```
 
 The store defaults to in-memory and the semantic engine to heuristics, so nothing above
-needs a cloud account or an API key. Set `GOOGLE_API_KEY` to switch the semantic audit,
+needs a cloud account or an API key when explicitly using local demo mode above.
+Auth otherwise defaults to Firebase; never expose local demo mode publicly. Set
+`GOOGLE_API_KEY` (and enable `ANUMATI_GEMINI`) to switch the semantic audit,
 mandate compiler and dispute memo to Gemini; set `ANUMATI_STORE=firestore` (on Cloud Run)
 for the Firestore backend. All knobs live in `backend/app/config.py` and are env-driven.
 
@@ -142,9 +148,10 @@ that break no hard rule. See [`eval/RESULTS.md`](eval/RESULTS.md).
 - **Gemini is advisory.** Its scores feed fusion but cannot override a hard policy
   failure, and its absence degrades to heuristics — never to approve-by-default.
 - **Firestore rules block all browser writes;** every write goes through the Cloud Run
-  API (Admin SDK). The demo rules allow authenticated reads across the single-tenant
-  synthetic dataset; a production per-user ruleset ships commented in
-  `web/firestore.rules`. Secrets live in Secret Manager; the HMAC signing key is
+  API (Admin SDK). Browser reads are owner-scoped; staff cross-account review uses
+  the API's verified-token and revoked-session checks. Deployed API requests require
+  Firebase identity; anonymous visitors are limited to synthetic sandbox payments.
+  See [`docs/AUTH.md`](docs/AUTH.md). Secrets live in Secret Manager; the HMAC signing key is
   swappable for Cloud KMS without changing the receipt format.
 - **Receipts verify in any language.** The canonical form normalises
   integer-valued floats so a receipt signed by the Python gateway re-verifies

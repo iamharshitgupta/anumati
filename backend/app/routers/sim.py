@@ -12,31 +12,88 @@ Two agent modes:
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import time
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
+from ..auth import Caller, require_owner, require_sandbox_mandate
 from ..config import settings
 from ..engine import baseline_caps_only, baseline_policy_only, decide, fuse
 from ..gemini import engine_name, generate_json
 from ..models import CartItem, PaymentRequest, TraceStep
 from ..policy import run_policy
 from ..scenarios import MERCHANT, SCENARIOS
+from ..seed import DEMO_MANDATE_ID
 from ..semantic import gemini_analyse, heuristic_analyse
 from ..store import get_store
 
-router = APIRouter(prefix="/sim", tags=["sandbox"])
+
+def _owned_mandate(body: dict, caller: Caller):
+    """Protect every execution route before history cleanup or model calls."""
+    mandate_id = body.get("mandate_id")
+    if not isinstance(mandate_id, str) or not mandate_id or "/" in mandate_id:
+        raise HTTPException(422, "A valid mandate_id is required")
+    mandate = get_store().get("mandates", mandate_id)
+    if not mandate:
+        raise HTTPException(404, "mandate not found")
+    require_sandbox_mandate(caller, mandate)
 
 
-@router.get("/scenarios")
+router = APIRouter(prefix="/sim", tags=["sandbox"], dependencies=[Depends(_owned_mandate)])
+public_router = APIRouter(prefix="/sim", tags=["sandbox"])
+
+
+@public_router.post("/session")
+def demo_session(caller: Caller):
+    """An authenticated visitor's synthetic fixture, not a real payment mandate.
+
+    Copies the seeded guardrails without another Gemini call. Create-once avoids
+    resetting a revoked mandate when the browser refreshes or requests race.
+    Existing user_demo history is never reassigned to a visiting account.
+    """
+    if caller.is_demo:
+        return {"user_id": caller.uid, "mandate_id": DEMO_MANDATE_ID}
+    store = get_store()
+    mandate_id = "mnd_demo_" + hashlib.sha256(caller.uid.encode()).hexdigest()
+    existing = store.get("mandates", mandate_id)
+    if existing:
+        require_owner(caller, existing.get("user_id"))
+        return {"user_id": caller.uid, "mandate_id": mandate_id}
+    template = store.get("mandates", DEMO_MANDATE_ID)
+    if not template:
+        raise HTTPException(503, "Demo template unavailable; an administrator must seed it")
+    now = datetime.now(timezone.utc)
+    mandate = copy.deepcopy(template)
+    mandate.update({"id": mandate_id, "user_id": caller.uid, "status": "active",
+                    "created_at": now.isoformat(), "signed_at": now.isoformat(),
+                    "expires_at": (now + timedelta(days=30)).isoformat(),
+                    "signature": "user-confirm:synthetic-demo", "demo_fixture": True})
+    mandate.setdefault("compiler_notes", []).append("Synthetic demo copy for this Firebase visitor")
+    saved = store.create("mandates", mandate_id, mandate)
+    require_owner(caller, saved.get("user_id"))
+    return {"user_id": caller.uid, "mandate_id": mandate_id}
+
+
+@public_router.post("/disputes/{dispute_id}/resolve")
+def resolve_demo_dispute(dispute_id: str, body: dict, caller: Caller):
+    """Role-play resolution only for the caller's server-created demo fixture."""
+    from .disputes import resolve_record
+
+    return resolve_record(dispute_id, body, caller, sandbox=True)
+
+
+@public_router.get("/scenarios")
 def list_scenarios():
     return [{"key": k, "title": v["title"], "attack": v["attack"], "expected": v["expected"], "multi": v.get("multi", 1)}
             for k, v in SCENARIOS.items()]
 
 
-@router.get("/merchant/{scenario}", response_class=HTMLResponse)
+@public_router.get("/merchant/{scenario}", response_class=HTMLResponse)
 def merchant_page(scenario: str):
     s = SCENARIOS.get(scenario)
     if not s:
@@ -46,7 +103,7 @@ def merchant_page(scenario: str):
     return f"<html><body style='font-family:system-ui;max-width:640px;margin:2rem auto'><pre style='white-space:pre-wrap'>{page}</pre></body></html>"
 
 
-@router.get("/merchant/{scenario}/raw", response_class=PlainTextResponse)
+@public_router.get("/merchant/{scenario}/raw", response_class=PlainTextResponse)
 def merchant_raw(scenario: str):
     s = SCENARIOS.get(scenario)
     if not s:

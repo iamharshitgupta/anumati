@@ -20,7 +20,7 @@ Target: 2:50. Record the console at 1440×900, API on Cloud Run with Gemini enab
 | 2:40–2:50 | `eval/RESULTS.md` table | "On 44 synthetic cases Anumati lands the right verdict every time — zero false flags, even on four hard-negative orders built to trip a naive detector. Deterministic rules alone catch most attacks; the Gemini audit adds the ones no rule can see — content that steers the agent without breaking a single limit. Firebase, Firestore, Cloud Run, Gemini — one gateway call for any agent on UPI." |
 
 ## Recording checklist
-- `curl $API/healthz` shows `semantic_engine: gemini` before recording.
+- `curl $API/status` shows `semantic_engine: gemini` before recording.
 - Run `POST /admin/seed` once; reload console so the mandate dropdown is populated.
 - Keep the "agent" dropdown on *naive* for the injection beats; switch to *Gemini-driven* once at the end only if time allows ("frontier models resist crude injections — Anumati is for the ones that don't, and for the subtler attacks").
 - Mute notifications; the toast on step-up is part of the demo.

@@ -4,6 +4,69 @@ All notable changes to Anumati are recorded here. The repository history is orga
 as an initial import of the build *as received*, followed by one commit per review
 theme, so the before/after of every change is visible in `git log` and `git diff`.
 
+## [0.6.0] — Go-live hardening: Firebase authentication and owner-scoped permissions
+
+Makes the gateway safe to expose on a public Cloud Run endpoint. Until now the API
+trusted a client-supplied `user_id` and had no authentication, so anyone could act
+as anyone and read any account's receipts — a non-starter for a live payment
+gateway. This release adds real identity and ownership without breaking the
+one-command local demo.
+
+### Identity & permissions
+- **Firebase ID-token auth** on every protected route: tokens are verified for
+  signature, expiry, project, revocation and disabled-account status. Account
+  ownership now comes from the verified Firebase UID, never from a submitted
+  `user_id`.
+- **Owner-scoped everything** — mandates, payments, simulations, decisions,
+  receipts and step-ups are scoped to their owner. Trusted custom claims identify
+  `analyst`/`admin`; ordinary and anonymous accounts are `user`. Staff may *read*
+  across accounts for review but **cannot** approve another user's STEP_UP, and
+  claims are assigned out-of-band (`infra/firebase_roles.py`), never through the UI.
+- **Admin-gated operations**: `/admin/seed` and shared agent registration now
+  require an `admin` claim.
+- **Public demo still works for visitors**: `/sim/session` mints a per-visitor
+  *synthetic* sandbox mandate (a copy of the demo fixture, owned by the caller's
+  UID), so an anonymous judge can run the whole red-team sandbox on the live site
+  without ever touching another account's data.
+
+### Zero-config local demo (the DX refinement)
+- The local in-memory build now **auto-selects the no-login demo path** — plain
+  `uvicorn app.main:app` just works, scoped to the synthetic demo user,
+  loopback-only. No `ANUMATI_AUTH_MODE`, no `--host`, no `--no-proxy-headers`.
+- The demo path is **refused whenever deployed** (`K_SERVICE`), in
+  `ANUMATI_ENV=production`, or on any Firestore-backed run — those always require a
+  verified Firebase token. Forwarded headers and non-loopback origins/hosts are
+  rejected; startup `validate_auth_configuration()` fails fast on a misconfig.
+
+### Security-review hardening
+- **Refuse to boot with the dev receipt key when deployed**: `validate_auth_configuration()`
+  now raises if a deployed service still has the default `RECEIPT_SIGNING_KEY`, so the
+  liability-bearing Decision Receipts can never be signed with a world-known HMAC key.
+- **Gemini cost guardrail**: a process-wide per-minute and total call cap sits in front
+  of every model call (`gemini.py`). Since every Gemini path has a heuristic fallback,
+  exceeding a cap degrades gracefully instead of spending — bounding credit burn from a
+  scripted caller hammering `/sim/compare` or `/sim/run?mode=gemini` behind free anonymous
+  tokens. Env-tunable (`GEMINI_MAX_CALLS_PER_MIN`, `GEMINI_MAX_CALLS_TOTAL`).
+- **Defense-in-depth id validation** on body-supplied `decision_id` (reject empty / `/`),
+  matching the sandbox mandate-id check.
+- Reviewed and confirmed safe: no authN bypass, no anonymous→staff escalation, no
+  cross-user IDOR on any router, demo mode unreachable when deployed, owner-scoped
+  Firestore rules, and token attachment limited to trusted origins.
+
+### Frontend & rules
+- Console signs in with Firebase (anonymous for the public demo; Google for
+  identified/team accounts) and attaches the ID token **only** to trusted origins
+  (page origin or the source-configured API origin) — never to an arbitrary
+  address typed into the console.
+- `web/firestore.rules` switched to the **owner-scoped** ruleset (per-document
+  reads by `user_id`, all browser writes denied).
+- `deploy.sh`, README and `docs/AUTH.md` document the token model; new
+  `docs/GO_LIVE.md` is the pre-deploy checklist.
+- **Health endpoint renamed `/healthz` → `/status`**: on Cloud Run (Knative) the
+  queue-proxy sidecar reserves `/healthz` for its own checks and never forwards it
+  to the container, so the console's engine badge couldn't read it. `/status`
+  reaches the app. Console, Hosting rewrite, deploy check and tests updated.
+
 ## [0.5.0] — Integration: evidence chain, baseline comparison, Firestore index tooling
 
 Integrates the contributed demo and infrastructure work on top of the review

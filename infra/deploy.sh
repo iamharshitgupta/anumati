@@ -6,6 +6,8 @@
 #
 # Use Vertex AI instead of a Gemini API key:
 #   USE_VERTEX=1 PROJECT=my-proj ./infra/deploy.sh
+# Before deploying: configure Firebase web config and enable Anonymous Auth.
+# Google Auth is optional for approved staff accounts; see docs/AUTH.md.
 set -euo pipefail
 
 PROJECT="${PROJECT:?set PROJECT}"
@@ -20,7 +22,8 @@ gcloud config set project "$PROJECT" >/dev/null
 
 echo "▶ enabling APIs"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
-  firestore.googleapis.com aiplatform.googleapis.com secretmanager.googleapis.com firebase.googleapis.com >/dev/null
+  firestore.googleapis.com aiplatform.googleapis.com secretmanager.googleapis.com firebase.googleapis.com \
+  identitytoolkit.googleapis.com >/dev/null
 
 echo "▶ Firestore (native mode) — no-op if it exists"
 gcloud firestore databases create --location="$REGION" --type=firestore-native >/dev/null 2>&1 || true
@@ -34,7 +37,7 @@ gcloud secrets add-iam-policy-binding anumati-receipt-key --member="serviceAccou
 
 # CORS is scoped to the Hosting origin (the console is same-origin via the proxy anyway);
 # override CORS_ORIGINS if you call the API directly from another browser origin.
-ENV_VARS="ANUMATI_STORE=firestore,GOOGLE_CLOUD_PROJECT=$PROJECT,GEMINI_MODEL=$MODEL,RECEIPT_KEY_ID=kms-v1,CORS_ORIGINS=${CORS_ORIGINS:-$HOST_URL}"
+ENV_VARS="ANUMATI_STORE=firestore,ANUMATI_AUTH_MODE=firebase,ANUMATI_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT,GEMINI_MODEL=$MODEL,RECEIPT_KEY_ID=kms-v1,CORS_ORIGINS=${CORS_ORIGINS:-$HOST_URL}"
 if [[ "${USE_VERTEX:-0}" == "1" ]]; then
   ENV_VARS="$ENV_VARS,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_LOCATION=$REGION"
   gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role=roles/aiplatform.user >/dev/null
@@ -52,6 +55,8 @@ else
   SECRETS="RECEIPT_SIGNING_KEY=anumati-receipt-key:latest,GOOGLE_API_KEY=anumati-gemini-key:latest"
 fi
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role=roles/datastore.user >/dev/null
+# Token revocation/disabled-account checks need user lookup, not role-edit rights.
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role=roles/firebaseauth.viewer >/dev/null
 
 echo "▶ deploying Cloud Run (min-instances=1 so judges never hit a cold start)"
 gcloud run deploy "$SERVICE" --source "$ROOT/backend" --region "$REGION" --allow-unauthenticated \
@@ -59,7 +64,7 @@ gcloud run deploy "$SERVICE" --source "$ROOT/backend" --region "$REGION" --allow
   --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS"
 API_URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
 echo "✔ API: $API_URL"
-curl -fsS "$API_URL/healthz" && echo
+curl -fsS "$API_URL/status" && echo
 
 echo "▶ Firebase Hosting + Firestore rules/indexes"
 cd "$ROOT/web"
@@ -74,5 +79,6 @@ echo
 echo "✔ Console: $HOST_URL"
 echo "✔ API:     $API_URL   (also proxied at $HOST_URL/v1/*)"
 echo
-echo "Next: paste your Firebase web config into web/firebase-config.js and redeploy hosting to enable realtime step-ups:"
+echo "Firebase mode requires web/firebase-config.js and Anonymous Auth; see docs/AUTH.md."
+echo "After changing the web config, redeploy hosting:"
 echo "  firebase deploy --only hosting --project $PROJECT"

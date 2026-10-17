@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from ..auth import Caller, require_owner, require_sandbox_mandate, scoped_user
 from ..engine import decide
 from ..models import Decision, PaymentRequest
 from ..receipts import verify_signature
@@ -11,44 +12,66 @@ router = APIRouter(prefix="/v1", tags=["decisions"])
 
 
 @router.post("/payments/authorize", response_model=Decision)
-def authorize(req: PaymentRequest):
+def authorize(req: PaymentRequest, caller: Caller):
     """The gateway call an agent (or the PSP fronting it) makes before a UPI
     collect/pay is initiated. Returns APPROVE / STEP_UP / BLOCK plus receipt id."""
     store = get_store()
+    require_owner(caller, req.user_id)
+    mandate = store.get("mandates", req.mandate_id)
+    if mandate:
+        require_owner(caller, mandate.get("user_id"))
+        if req.simulated:
+            require_sandbox_mandate(caller, mandate)
+        elif mandate.get("demo_fixture") is True:
+            raise HTTPException(403, "Synthetic mandates only accept simulated payments")
+    elif req.simulated:
+        raise HTTPException(404, "Sandbox mandate not found")
+    if (caller.is_anonymous or caller.is_demo) and not req.simulated:
+        raise HTTPException(403, "Guest and local demo accounts can only authorize synthetic payments")
     if req.idempotency_key:
-        prior = store.query("decisions", [("request.idempotency_key", "==", req.idempotency_key)], limit=1)
+        prior = store.query("decisions", [
+            ("request.user_id", "==", req.user_id), ("request.mandate_id", "==", req.mandate_id),
+            ("request.agent_id", "==", req.agent_id), ("request.idempotency_key", "==", req.idempotency_key),
+            ("request.simulated", "==", req.simulated),
+        ], limit=1)
         if prior:
             return prior[0]
     return decide(req, store)
 
 
 @router.get("/decisions", response_model=list[Decision])
-def list_decisions(user_id: str | None = None, limit: int = 50):
+def list_decisions(caller: Caller, user_id: str | None = None, limit: int = 50):
     store = get_store()
+    user_id = scoped_user(caller, user_id)
     f = [("request.user_id", "==", user_id)] if user_id else []
     return store.query("decisions", f, order_by="created_at", descending=True, limit=min(limit, 200))
 
 
 @router.get("/decisions/{decision_id}", response_model=Decision)
-def get_decision(decision_id: str):
+def get_decision(decision_id: str, caller: Caller):
     d = get_store().get("decisions", decision_id)
     if not d:
         raise HTTPException(404, "decision not found")
+    require_owner(caller, d.get("request", {}).get("user_id"), staff_read=True)
     return d
 
 
 @router.get("/receipts/{receipt_id}")
-def get_receipt(receipt_id: str):
+def get_receipt(receipt_id: str, caller: Caller):
     r = get_store().get("receipts", receipt_id)
     if not r:
         raise HTTPException(404, "receipt not found")
+    require_owner(caller, r.get("user_id"), staff_read=True)
     r["signature_valid"] = verify_signature(r)
     return r
 
 
 @router.get("/receipts")
-def list_receipts(mandate_id: str | None = None, limit: int = 50):
+def list_receipts(caller: Caller, mandate_id: str | None = None, limit: int = 50):
     f = [("mandate_id", "==", mandate_id)] if mandate_id else []
+    user_id = scoped_user(caller)
+    if user_id:
+        f.append(("user_id", "==", user_id))
     rows = get_store().query("receipts", f, order_by="issued_at", descending=True, limit=min(limit, 200))
     for r in rows:
         r["signature_valid"] = verify_signature(r)
@@ -56,13 +79,17 @@ def list_receipts(mandate_id: str | None = None, limit: int = 50):
 
 
 @router.post("/receipts/verify")
-def verify_receipt(receipt: dict):
-    """Offline verification: anyone with the receipt JSON can check hash + signature."""
+def verify_receipt(receipt: dict, caller: Caller):
+    """Verify supplied receipt JSON; this does not retrieve another user's data."""
     return {"valid": verify_signature(receipt), "hash": receipt.get("hash")}
 
 
 @router.get("/receipts/chain/{mandate_id}")
-def verify_chain(mandate_id: str):
+def verify_chain(mandate_id: str, caller: Caller):
+    mandate = get_store().get("mandates", mandate_id)
+    if not mandate:
+        raise HTTPException(404, "mandate not found")
+    require_owner(caller, mandate.get("user_id"), staff_read=True)
     rows = get_store().query("receipts", [("mandate_id", "==", mandate_id)], order_by="issued_at")
     ok = True
     prev = "0" * 64

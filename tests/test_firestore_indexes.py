@@ -12,8 +12,11 @@ sys.path.insert(0, str(ROOT))
 from infra import firestore_indexes as setup  # noqa: E402
 
 
-def receipt_index(state=Index.State.READY):
-    return Index(query_scope="COLLECTION", state=state, fields=[
+RECEIPT_INDEX_NAME = "projects/example-project/databases/demo/collectionGroups/receipts/indexes/test"
+
+
+def receipt_index(state=Index.State.READY, name=""):
+    return Index(name=name, query_scope="COLLECTION", state=state, fields=[
         {"field_path": "mandate_id", "order": "ASCENDING"},
         {"field_path": "issued_at", "order": "DESCENDING"},
     ])
@@ -23,10 +26,19 @@ def test_offline_preview_reads_existing_definitions_from_any_directory(tmp_path,
     monkeypatch.chdir(tmp_path)
     client = Mock(side_effect=AssertionError("Preview must not access cloud credentials."))
     monkeypatch.setattr(setup, "FirestoreAdminClient", client)
-    assert len(setup.load_indexes(setup.DEFAULT_INDEX_FILE)) == 7
+    indexes = setup.load_indexes(setup.DEFAULT_INDEX_FILE)
+    assert indexes and any(collection == "receipts" for collection, _ in indexes)
     assert setup.main(["--project", "example-project"]) == 0
     client.assert_not_called()
     assert "PREVIEW" in capsys.readouterr().out
+
+
+def test_manifest_includes_mode_scoped_payment_idempotency():
+    manifest = json.loads(setup.DEFAULT_INDEX_FILE.read_text())
+    fields = {"request.user_id", "request.mandate_id", "request.agent_id", "request.idempotency_key", "request.simulated"}
+    assert any(index["collectionGroup"] == "decisions" and index["queryScope"] == "COLLECTION"
+               and {field["fieldPath"] for field in index["fields"]} == fields
+               for index in manifest["indexes"])
 
 
 def test_apply_creates_missing_index_then_skips_existing_build():
@@ -37,7 +49,7 @@ def test_apply_creates_missing_index_then_skips_existing_build():
     client.create_index.assert_called_once_with(
         parent="projects/example-project/databases/demo/collectionGroups/receipts", index=wanted, timeout=30,
     )
-    actual = receipt_index(state=Index.State.CREATING)
+    actual = receipt_index(state=Index.State.CREATING, name=RECEIPT_INDEX_NAME)
     actual.fields.append(Index.IndexField(field_path="__name__", order="DESCENDING"))
     client.list_indexes.return_value = [actual]
     assert setup.apply_indexes(client, "example-project", "demo", [("receipts", wanted)]) == 0
@@ -46,12 +58,13 @@ def test_apply_creates_missing_index_then_skips_existing_build():
 
 def test_apply_waits_until_ready(monkeypatch, capsys):
     client = Mock()
-    client.list_indexes.side_effect = [[], [receipt_index(Index.State.CREATING)], [receipt_index()]]
+    client.list_indexes.side_effect = [[], [receipt_index(Index.State.CREATING, RECEIPT_INDEX_NAME)],
+                                     [receipt_index(name=RECEIPT_INDEX_NAME)]]
     monkeypatch.setattr(setup, "load_indexes", Mock(return_value=[("receipts", receipt_index())]))
     monkeypatch.setattr(setup, "FirestoreAdminClient", Mock(return_value=client))
     sleep = Mock()
     monkeypatch.setattr(setup.time, "sleep", sleep)
-    assert setup.main(["--project", "example-project", "--apply", "--wait"]) == 0
+    assert setup.main(["--project", "example-project", "--database", "demo", "--apply", "--wait"]) == 0
     assert client.create_index.call_count == 1
     sleep.assert_called_once()
     assert "READY: all 1" in capsys.readouterr().out
@@ -68,8 +81,42 @@ def test_invalid_definition_fails_before_cloud_access(tmp_path, monkeypatch):
 
 def test_readiness_timeout_does_not_cancel_builds(monkeypatch):
     client = Mock()
-    client.list_indexes.return_value = [receipt_index(Index.State.CREATING)]
+    client.list_indexes.return_value = [receipt_index(Index.State.CREATING, RECEIPT_INDEX_NAME)]
     monkeypatch.setattr(setup.time, "monotonic", Mock(side_effect=[0, 61]))
     with pytest.raises(RuntimeError, match="Builds may still be running"):
         setup.wait_until_ready(client, "projects/example-project/databases/demo", [("receipts", receipt_index())], 60)
     client.cancel_operation.assert_not_called()
+
+
+@pytest.mark.parametrize("name", [
+    "projects/example-project/databases/demo/collectionGroups/mandates/indexes/test",
+    "projects/example-project/databases/demo/collectionGroups/receipts_backup/indexes/test",
+    "projects/example-project/databases/other/collectionGroups/receipts/indexes/test",
+    "projects/other-project/databases/demo/collectionGroups/receipts/indexes/test",
+    "",
+])
+def test_foreign_or_unnamed_index_does_not_skip_creation(name):
+    client = Mock()
+    client.list_indexes.return_value = [receipt_index(name=name)]
+    assert setup.apply_indexes(client, "example-project", "demo", [("receipts", receipt_index())]) == 1
+    client.create_index.assert_called_once()
+
+
+def test_collection_match_wins_over_foreign_ready_index():
+    client = Mock()
+    actual = receipt_index(Index.State.CREATING, RECEIPT_INDEX_NAME)
+    foreign = receipt_index(name=RECEIPT_INDEX_NAME.replace("/receipts/", "/mandates/"))
+    client.list_indexes.return_value = [actual, foreign]
+    existing = setup.list_existing(client, "projects/example-project/databases/demo", "receipts")
+    assert existing[setup.index_key(receipt_index())].state == Index.State.CREATING
+    assert setup.apply_indexes(client, "example-project", "demo", [("receipts", receipt_index())]) == 0
+    client.create_index.assert_not_called()
+
+
+def test_foreign_ready_index_cannot_make_readiness_pass(monkeypatch, capsys):
+    client = Mock()
+    client.list_indexes.return_value = [receipt_index(name=RECEIPT_INDEX_NAME.replace("/receipts/", "/mandates/"))]
+    monkeypatch.setattr(setup.time, "monotonic", Mock(side_effect=[0, 61]))
+    with pytest.raises(RuntimeError, match="Timed out waiting"):
+        setup.wait_until_ready(client, "projects/example-project/databases/demo", [("receipts", receipt_index())], 60)
+    assert "READY: all" not in capsys.readouterr().out
