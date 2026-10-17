@@ -38,6 +38,21 @@ one-command local demo.
   verified Firebase token. Forwarded headers and non-loopback origins/hosts are
   rejected; startup `validate_auth_configuration()` fails fast on a misconfig.
 
+### Security-review hardening
+- **Refuse to boot with the dev receipt key when deployed**: `validate_auth_configuration()`
+  now raises if a deployed service still has the default `RECEIPT_SIGNING_KEY`, so the
+  liability-bearing Decision Receipts can never be signed with a world-known HMAC key.
+- **Gemini cost guardrail**: a process-wide per-minute and total call cap sits in front
+  of every model call (`gemini.py`). Since every Gemini path has a heuristic fallback,
+  exceeding a cap degrades gracefully instead of spending — bounding credit burn from a
+  scripted caller hammering `/sim/compare` or `/sim/run?mode=gemini` behind free anonymous
+  tokens. Env-tunable (`GEMINI_MAX_CALLS_PER_MIN`, `GEMINI_MAX_CALLS_TOTAL`).
+- **Defense-in-depth id validation** on body-supplied `decision_id` (reject empty / `/`),
+  matching the sandbox mandate-id check.
+- Reviewed and confirmed safe: no authN bypass, no anonymous→staff escalation, no
+  cross-user IDOR on any router, demo mode unreachable when deployed, owner-scoped
+  Firestore rules, and token attachment limited to trusted origins.
+
 ### Frontend & rules
 - Console signs in with Firebase (anonymous for the public demo; Google for
   identified/team accounts) and attaches the ID token **only** to trusted origins

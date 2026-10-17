@@ -525,3 +525,47 @@ def test_real_firebase_sdk_verifies_signed_tokens_without_cloud(api, monkeypatch
         assert response.status_code == (200 if case == "valid" else 401), response.text
     finally:
         firebase_admin.delete_app(app)
+
+
+# --- security-review hardening (M2 signing-key guard, M1 Gemini cost cap) ------
+
+def test_deployed_refuses_default_receipt_signing_key(monkeypatch):
+    """A deployed service must not sign liability receipts with the dev HMAC key."""
+    from app.config import DEFAULT_RECEIPT_SIGNING_KEY
+    monkeypatch.setenv("K_SERVICE", "anumati-api")
+    monkeypatch.delenv("FIREBASE_AUTH_EMULATOR_HOST", raising=False)
+    base = replace(auth.settings, auth_mode="firebase", environment="production",
+                   gcp_project="anumati-x", store_backend="firestore")
+    monkeypatch.setattr(auth, "settings", replace(base, receipt_signing_key=DEFAULT_RECEIPT_SIGNING_KEY))
+    with pytest.raises(RuntimeError, match="RECEIPT_SIGNING_KEY"):
+        auth.validate_auth_configuration()
+    # a real injected key boots fine
+    monkeypatch.setattr(auth, "settings", replace(base, receipt_signing_key="kms-backed-secret"))
+    auth.validate_auth_configuration()
+
+
+def _reset_gemini_limiter(gemini):
+    gemini._rl_window_start = 0.0
+    gemini._rl_window_count = 0
+    gemini._rl_total = 0
+    gemini._rl_warned_total = False
+
+
+def test_gemini_per_minute_cap_degrades_to_heuristics(monkeypatch):
+    from app import gemini
+    _reset_gemini_limiter(gemini)
+    monkeypatch.setattr(gemini, "settings", SimpleNamespace(gemini_max_calls_per_min=2, gemini_max_calls_total=0))
+    assert gemini._rate_limit_ok() is True
+    assert gemini._rate_limit_ok() is True
+    assert gemini._rate_limit_ok() is False  # window cap hit
+    # even when the client is 'available', an over-cap call returns None (fallback)
+    monkeypatch.setattr(gemini, "available", lambda: True)
+    assert gemini.generate_json("sys", "prompt") is None
+
+
+def test_gemini_total_cap_is_enforced(monkeypatch):
+    from app import gemini
+    _reset_gemini_limiter(gemini)
+    monkeypatch.setattr(gemini, "settings", SimpleNamespace(gemini_max_calls_per_min=0, gemini_max_calls_total=1))
+    assert gemini._rate_limit_ok() is True
+    assert gemini._rate_limit_ok() is False  # total cap hit

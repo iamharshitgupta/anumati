@@ -36,7 +36,7 @@ from urllib.parse import urlsplit
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .config import settings
+from .config import DEFAULT_RECEIPT_SIGNING_KEY, settings
 
 log = logging.getLogger("anumati.auth")
 _bearer = HTTPBearer(auto_error=False)
@@ -65,6 +65,10 @@ def validate_auth_configuration() -> None:
         raise RuntimeError("Firebase authentication requires GOOGLE_CLOUD_PROJECT")
     if settings.auth_mode == "demo" and settings.store_backend != "memory":
         raise RuntimeError("Local demo authentication requires memory storage; use Firebase authentication for Firestore")
+    if deployed and settings.receipt_signing_key == DEFAULT_RECEIPT_SIGNING_KEY:
+        # Decision Receipts are the liability artifact; a world-known HMAC key makes
+        # them forgeable. Refuse to boot rather than sign with the dev default.
+        raise RuntimeError("Deployed service must set RECEIPT_SIGNING_KEY (Secret Manager), not the dev default")
 
 
 def _verify_firebase_token(token: str) -> dict:

@@ -8,6 +8,11 @@ import os
 from dataclasses import dataclass, field
 
 
+# Sentinel for the local-only HMAC key. A deployed service must never sign the
+# liability-bearing Decision Receipts with this — see validate_auth_configuration().
+DEFAULT_RECEIPT_SIGNING_KEY = "dev-only-insecure-key-change-me"
+
+
 def _bool(name: str, default: bool) -> bool:
     v = os.getenv(name)
     if v is None:
@@ -58,11 +63,17 @@ class Settings:
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     gemini_enabled: bool = _bool("ANUMATI_GEMINI", True)
     gemini_timeout_s: float = float(os.getenv("GEMINI_TIMEOUT_S", "12"))
+    # Cost guardrails: every Gemini path has a heuristic fallback, so when a cap is
+    # hit we simply degrade to heuristics instead of spending more. This bounds the
+    # credit burn from a scripted caller hammering /sim/compare or /sim/run?mode=gemini
+    # behind free anonymous tokens. Override per deploy; 0 disables a cap.
+    gemini_max_calls_per_min: int = int(os.getenv("GEMINI_MAX_CALLS_PER_MIN", "30"))
+    gemini_max_calls_total: int = int(os.getenv("GEMINI_MAX_CALLS_TOTAL", "5000"))
 
     # --- receipts -------------------------------------------------------
     # HMAC key for Decision Receipts. In production rotate via Secret Manager
     # and/or swap to Cloud KMS asymmetric signing (see receipts.py).
-    receipt_signing_key: str = os.getenv("RECEIPT_SIGNING_KEY", "dev-only-insecure-key-change-me")
+    receipt_signing_key: str = os.getenv("RECEIPT_SIGNING_KEY", DEFAULT_RECEIPT_SIGNING_KEY)
     receipt_key_id: str = os.getenv("RECEIPT_KEY_ID", "dev-hmac-v1")
 
     # --- risk policy ----------------------------------------------------

@@ -65,6 +65,8 @@ def _heuristic_attribution(receipt: dict, claim: str) -> dict:
 @router.post("")
 def create_dispute(body: DisputeCreate, caller: Caller):
     store = get_store()
+    if not isinstance(body.decision_id, str) or not body.decision_id or "/" in body.decision_id:
+        raise HTTPException(422, "A valid decision_id is required")
     dec = store.get("decisions", body.decision_id)
     if not dec:
         raise HTTPException(404, "decision not found")
