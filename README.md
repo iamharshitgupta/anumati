@@ -84,6 +84,15 @@ web/       Firebase console + rules/indexes    eval/     synthetic suite, baseli
 tests/     pytest                              infra/    deploy.sh
 ```
 
+## Contributors
+
+- **Harshit Gupta** ([@iamharshitgupta](https://github.com/iamharshitgupta)) — gateway, policy engine, receipts, auth, deploy
+- **Abhishek Kushwaha** ([@abhishekkushwaha4u](https://github.com/abhishekkushwaha4u)) — Firestore infrastructure, Firebase auth & permissions
+- **Sanjana Das** ([@Sanjana747](https://github.com/Sanjana747)) — demo & step-up console, red-team sandbox UI
+- **Jay Shah** ([@jayshah-cys](https://github.com/jayshah-cys)) — security review & testing
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for details.
+
 ## Documents
 
 - [Product Requirements](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Authentication](docs/AUTH.md) · [Theme & rubric alignment](docs/THEME_ALIGNMENT.md) · [Submission text](docs/SUBMISSION.md) · [Eval results](eval/RESULTS.md)
