@@ -5,16 +5,14 @@
 // Enable Anonymous in Firebase Authentication -> Sign-in method for visitors;
 // enable Google and authorize the console's domain for optional team sign-in.
 //
-// projectId/authDomain are set for the deploy target (anumati-511908). The apiKey
-// and appId are per-web-app values — paste them from the Firebase console:
-//   Project settings → Your apps → (web app) → SDK setup and configuration.
-// They MUST belong to anumati-511908, or the console's tokens will be rejected by
-// the API (which verifies tokens against GOOGLE_CLOUD_PROJECT=anumati-511908).
+// Web app "Anumati Console" in project anumati-511908. The apiKey is a public
+// project identifier (not a secret); restrict it to the Hosting domain under
+// GCP → APIs & Services → Credentials for production hygiene.
 window.ANUMATI_FIREBASE = {
-  apiKey: "",
+  apiKey: "AIzaSyBSjYE-jArTZ4auyh1r2JidRPggzAPnP3Q",
   authDomain: "anumati-511908.firebaseapp.com",
   projectId: "anumati-511908",
-  appId: "",
+  appId: "1:227794455624:web:25ddfe11bd934e28ee1c7d",
 };
 // Trusted API base, configured here rather than granted trust by the header input.
 // On Firebase Hosting, "" uses same-origin rewrites. Local consoles also trust
