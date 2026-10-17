@@ -5,9 +5,11 @@ Fill the form fields from here. Deadline **18 Oct 2026, 11:59 PM IST**.
 ## Challenge
 BFSI: Intelligent Risk, Fraud & Financial Experiences
 
-## Prototype link (Cloud Run / Firebase Hosting)
-`https://<project>.web.app` — console (proxies the API)
-`https://anumati-api-<hash>-<region>.a.run.app` — API (`/docs`, `/status`)
+## Prototype link (Cloud Run / Firebase Hosting) — LIVE
+- **Console:** https://anumati-511908.web.app (anonymous sign-in; proxies the API)
+- **API:** https://anumati-api-227794455624.asia-south1.run.app — `/docs`, `/status`
+- `/status` reports `semantic_engine: gemini` (`gemini-2.5-flash` via Vertex AI),
+  `store: firestore`, `auth_mode: firebase` — the Gen-AI build judges score on.
 
 ## GitHub
 `https://github.com/iamharshitgupta/anumati` — **private during the build; make
