@@ -44,9 +44,9 @@ function consoleFixture({ apiHealth = health, healthError = false, popupError = 
   const requests = [];
   const fetcher = async (url, opts = {}) => {
     const path = new URL(url).pathname;
-    if (path === "/healthz" && healthError) throw new Error("API unreachable");
+    if (path === "/status" && healthError) throw new Error("API unreachable");
     requests.push({ path, headers: opts.headers });
-    return { ok: true, json: async () => path === "/healthz" ? apiHealth : path === "/sim/session" ? {} : [],
+    return { ok: true, json: async () => path === "/status" ? apiHealth : path === "/sim/session" ? {} : [],
       text: async () => "" };
   };
   const connection = { pageURL: "http://localhost:5173/", configuredBase: "" };
@@ -77,7 +77,7 @@ test("failed startup keeps Team sign-in usable but gates protected actions until
   await settle();
   assert.equal(f.popupCalls(), 1);
   assert.equal(f.element("#runBtn").disabled, true);
-  assert.deepEqual(f.requests.map((r) => r.path), ["/healthz"]);
+  assert.deepEqual(f.requests.map((r) => r.path), ["/status"]);
   f.finishPopup();
   await recovering;
   assert.equal(f.element("#identityBadge").textContent, "user · fresh-us");
@@ -93,7 +93,7 @@ test("cancelled recovery leaves API actions disabled and permits another sign-in
   assert.equal(f.popupCalls(), 1); assert.equal(f.anonymousCalls(), 0);
   assert.equal(f.element("#signInBtn").disabled, false);
   assert.equal(f.element("#compileBtn").disabled, true);
-  assert.deepEqual(f.requests.map((r) => r.path), ["/healthz"]);
+  assert.deepEqual(f.requests.map((r) => r.path), ["/status"]);
 });
 
 test("unreachable API or mismatched project cannot offer recovery or load Firebase", async () => {

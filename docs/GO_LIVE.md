@@ -52,7 +52,7 @@ and the no-login demo path can never activate.
 
 ## 4 · Verify the live deployment
 
-- [ ] `curl https://<api-url>/healthz` → `"auth_mode":"firebase"`,
+- [ ] `curl https://<api-url>/status` → `"auth_mode":"firebase"`,
       `"store":"firestore"`, and `"semantic_engine":"gemini"` (confirms the judged
       Gen-AI build, not heuristics).
 - [ ] Unauthenticated `POST /v1/payments/authorize` → **401** (auth is enforced).

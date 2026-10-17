@@ -77,7 +77,7 @@ async function boot() {
   const version = sessionVersion;
   let h;
   try {
-    h = await api("/healthz");
+    h = await api("/status");
     if (version !== sessionVersion) return;
     $("#engineBadge").textContent = `semantic: ${h.semantic_engine}${h.model ? " · " + h.model : ""} · store: ${h.store}`;
     $("#engineBadge").className = "badge " + (h.semantic_engine === "gemini" ? "ok" : "");

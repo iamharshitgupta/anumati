@@ -80,7 +80,7 @@ export function apiDestination(base, path, connection = {
 export async function requestJSON(base, path, opts = {}, identity = null, fetcher = fetch, connection) {
   // The health response and editable API field cannot grant trust to an origin.
   const destination = apiDestination(base, path, connection);
-  const publicRequest = path === "/healthz" || path === "/sim/scenarios";
+  const publicRequest = path === "/status" || path === "/sim/scenarios";
   const headers = new Headers(opts.headers);
   headers.delete("Authorization");
   headers.set("content-type", "application/json");

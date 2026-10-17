@@ -62,6 +62,10 @@ one-command local demo.
   reads by `user_id`, all browser writes denied).
 - `deploy.sh`, README and `docs/AUTH.md` document the token model; new
   `docs/GO_LIVE.md` is the pre-deploy checklist.
+- **Health endpoint renamed `/healthz` → `/status`**: on Cloud Run (Knative) the
+  queue-proxy sidecar reserves `/healthz` for its own checks and never forwards it
+  to the container, so the console's engine badge couldn't read it. `/status`
+  reaches the app. Console, Hosting rewrite, deploy check and tests updated.
 
 ## [0.5.0] — Integration: evidence chain, baseline comparison, Firestore index tooling
 

@@ -22,7 +22,7 @@ separate concerns, not included in this change.
 ## Token Flow
 
 1. The console checks the API origin against source configuration before probing
-   public `/healthz` to learn its auth mode/project. A health response cannot grant
+   public `/status` to learn its auth mode/project. A health response cannot grant
    trust to a different origin.
 2. In Firebase mode, it loads the matching Firebase web configuration, waits for
    the existing session, and signs in anonymously only if no session exists.
@@ -49,7 +49,7 @@ never fall back to local demo permissions.
 
 - Auth defaults to **Firebase**, not unauthenticated access. All `/v1/*`, simulator
   execution/session/closure routes, and `/admin/seed` require a caller.
-- `/`, `/healthz`, `/docs`, `/openapi.json`, `/sim/scenarios` and static mock merchant
+- `/`, `/status`, `/docs`, `/openapi.json`, `/sim/scenarios` and static mock merchant
   pages remain public. They do not disclose per-visitor records or run Gemini.
 - New mandates keep the existing `user_id` field, but its value comes from the
   caller's UID, ignoring a submitted user ID in every mode. The console's user

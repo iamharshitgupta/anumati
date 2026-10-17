@@ -64,7 +64,7 @@ gcloud run deploy "$SERVICE" --source "$ROOT/backend" --region "$REGION" --allow
   --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS"
 API_URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
 echo "✔ API: $API_URL"
-curl -fsS "$API_URL/healthz" && echo
+curl -fsS "$API_URL/status" && echo
 
 echo "▶ Firebase Hosting + Firestore rules/indexes"
 cd "$ROOT/web"

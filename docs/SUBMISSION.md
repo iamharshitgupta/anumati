@@ -7,7 +7,7 @@ BFSI: Intelligent Risk, Fraud & Financial Experiences
 
 ## Prototype link (Cloud Run / Firebase Hosting)
 `https://<project>.web.app` — console (proxies the API)
-`https://anumati-api-<hash>-<region>.a.run.app` — API (`/docs`, `/healthz`)
+`https://anumati-api-<hash>-<region>.a.run.app` — API (`/docs`, `/status`)
 
 ## GitHub
 `https://github.com/iamharshitgupta/anumati` — **private during the build; make
@@ -45,7 +45,7 @@ Suggested slide mapping onto the template's sections:
 Required tech: **Gemini/Gemma** (or an agentic platform) + **Cloud Run or Firebase**. Anumati uses Gemini 2.5 Flash on both Cloud Run and Firebase.
 
 ## Pre-submission checklist
-- [ ] `healthz` returns `semantic_engine: gemini` on the deployed URL (the 40% Gen-AI score is judged on the Gemini build, not the heuristic default)
+- [ ] `status` returns `semantic_engine: gemini` on the deployed URL (the 40% Gen-AI score is judged on the Gemini build, not the heuristic default)
 - [ ] Cloud Run `min-instances=1`; budget alert set
 - [ ] Firebase config pasted; step-up toast works in a fresh incognito window
 - [ ] Repo made **public** before the deadline; README renders; `eval/RESULTS.md` committed from a Gemini run

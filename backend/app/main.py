@@ -43,8 +43,11 @@ for r in (mandates, agents, decisions, stepups, disputes, sim):
 app.include_router(sim.public_router)
 
 
-@app.get("/healthz")
-def healthz():
+# NOTE: not named "/healthz" — on Cloud Run (Knative) the queue-proxy sidecar
+# reserves "/healthz" for its own health checks and never forwards it to the app,
+# so a "/healthz" route returns an edge 404. "/status" reaches the container.
+@app.get("/status")
+def status():
     return {"ok": True, "version": __version__, "store": settings.store_backend, "semantic_engine": engine_name(),
             "model": settings.gemini_model if engine_name() == "gemini" else None, "auth_mode": settings.auth_mode,
             "firebase_project_id": settings.gcp_project if settings.auth_mode == "firebase" else None}
@@ -52,7 +55,7 @@ def healthz():
 
 @app.get("/")
 def root():
-    return {"service": "anumati", "docs": "/docs", "health": "/healthz"}
+    return {"service": "anumati", "docs": "/docs", "health": "/status"}
 
 
 @app.post("/admin/seed")

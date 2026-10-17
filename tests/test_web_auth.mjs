@@ -179,7 +179,7 @@ test("API helper attaches the current token, preserves headers, and encodes JSON
 
 test("public health probe does not send a user token", async () => {
   const identity = { mode: "firebase", getToken: () => { throw new Error("token requested"); } };
-  await requestJSON("https://api.example", "/healthz", { headers: { Authorization: "supplied-token" } }, identity, async (_, opts) => {
+  await requestJSON("https://api.example", "/status", { headers: { Authorization: "supplied-token" } }, identity, async (_, opts) => {
     assert.equal(opts.headers.get("Authorization"), null);
     return { ok: true, json: async () => ({ ok: true }) };
   }, connection);
@@ -199,7 +199,7 @@ test("uninitialized identity, account switch and insecure transport fail closed"
 test("untrusted API origins fail before token retrieval or a public health probe", async () => {
   const identity = { mode: "firebase", getToken: () => { throw new Error("unexpected token retrieval"); } };
   const fetcher = () => { throw new Error("unexpected fetch"); };
-  for (const path of ["/v1/mandates", "/healthz", "/sim/scenarios"]) {
+  for (const path of ["/v1/mandates", "/status", "/sim/scenarios"]) {
     await assert.rejects(requestJSON("https://unconfigured.example", path, {}, identity, fetcher, connection), /not trusted/);
   }
 });
@@ -215,14 +215,14 @@ test("same-origin rewrites and explicitly configured HTTPS APIs are trusted", ()
 test("local port 8080 aliases work; other local ports require source configuration", () => {
   const local = { pageURL: "http://localhost:5173/index.html", configuredBase: "" };
   for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
-    assert.equal(apiDestination(`http://${host}:8080`, "/healthz", local), `http://${host}:8080/healthz`);
+    assert.equal(apiDestination(`http://${host}:8080`, "/status", local), `http://${host}:8080/status`);
   }
-  assert.throws(() => apiDestination("http://localhost:8091", "/healthz", local), /not trusted/);
-  assert.equal(apiDestination("http://localhost:8091", "/healthz", {
+  assert.throws(() => apiDestination("http://localhost:8091", "/status", local), /not trusted/);
+  assert.equal(apiDestination("http://localhost:8091", "/status", {
     ...local, configuredBase: "http://localhost:8091",
-  }), "http://localhost:8091/healthz");
-  assert.throws(() => apiDestination("http://localhost:8080", "/healthz", connection), /not trusted/);
-  assert.throws(() => apiDestination("http://localhost:8080", "/healthz", {
+  }), "http://localhost:8091/status");
+  assert.throws(() => apiDestination("http://localhost:8080", "/status", connection), /not trusted/);
+  assert.throws(() => apiDestination("http://localhost:8080", "/status", {
     ...connection, configuredBase: "http://localhost:8080",
   }), /HTTPS/);
 });

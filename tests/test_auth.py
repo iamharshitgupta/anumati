@@ -103,9 +103,9 @@ def test_protected_routes_require_a_token(api, method, path, body):
 
 
 def test_public_catalog_and_health_stay_public(api):
-    for path in ("/", "/healthz", "/docs", "/openapi.json", "/sim/scenarios", "/sim/merchant/clean/raw"):
+    for path in ("/", "/status", "/docs", "/openapi.json", "/sim/scenarios", "/sim/merchant/clean/raw"):
         assert api.client.get(path).status_code == 200
-    assert api.client.get("/healthz").json()["firebase_project_id"] == "demo-anumati"
+    assert api.client.get("/status").json()["firebase_project_id"] == "demo-anumati"
 
 
 @pytest.mark.parametrize("token", ["invalid", "expired", "revoked", "wrong-project"])
