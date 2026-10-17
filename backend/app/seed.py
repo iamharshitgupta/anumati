@@ -22,7 +22,8 @@ def seed(store: BaseStore) -> dict:
         "attestation": "uap-sandbox-attestation-0001", "status": "active", "registered_at": utcnow_iso(),
     })
     now = datetime.now(timezone.utc)
-    if not store.get("mandates", DEMO_MANDATE_ID):
+    existing = store.get("mandates", DEMO_MANDATE_ID)
+    if not existing:
         g, compiler, notes = compile_mandate(DEMO_MANDATE_TEXT)
         # The compiler (heuristic or Gemini) already yields these guardrails from the text
         # above. We reconcile against the sandbox invariants so the demo stays deterministic
@@ -40,7 +41,11 @@ def seed(store: BaseStore) -> dict:
             "guardrails": g.model_dump(), "status": "active", "created_at": now.isoformat(),
             "expires_at": (now + timedelta(days=30)).isoformat(), "signed_at": now.isoformat(),
             "signature": "user-confirm:demo", "version": 1, "compiler": compiler, "compiler_notes": notes,
+            "demo_fixture": True,
         })
+    elif existing.get("user_id") == DEMO_USER and existing.get("agent_id") == DEMO_AGENT and existing.get("demo_fixture") is not True:
+        # Only classify the known legacy template; never reactivate or transfer it.
+        store.update("mandates", DEMO_MANDATE_ID, {"demo_fixture": True})
     # verified merchant directory (NPCI verified-merchant analogue)
     for vpa, merchant in [("freshkart@okaxis", "freshkart"), ("zepto@axisbank", "zepto"), ("bigbasket@hdfcbank", "bigbasket"),
                           ("swiggy@icici", "swiggy"), ("zomato@ybl", "zomato")]:

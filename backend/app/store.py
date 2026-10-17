@@ -35,6 +35,10 @@ def utcnow_iso() -> str:
 
 
 class BaseStore:
+    def create(self, collection: str, doc_id: str, doc: dict) -> dict:
+        """Create once; return the existing document without overwriting it."""
+        raise NotImplementedError
+
     def put(self, collection: str, doc_id: str, doc: dict) -> dict:  # full write
         raise NotImplementedError
 
@@ -68,6 +72,10 @@ class MemoryStore(BaseStore):
     def __init__(self) -> None:
         self._data: dict[str, dict[str, dict]] = {}
         self._lock = threading.RLock()
+
+    def create(self, collection, doc_id, doc):
+        with self._lock:
+            return self.get(collection, doc_id) or self.put(collection, doc_id, doc)
 
     def put(self, collection: str, doc_id: str, doc: dict) -> dict:
         with self._lock:
@@ -146,6 +154,17 @@ class FirestoreStore(BaseStore):
 
         self._fs = firestore
         self._client = firestore.Client(project=project, database=database)
+
+    def create(self, collection, doc_id, doc):
+        from google.api_core.exceptions import AlreadyExists
+
+        d = {**doc, "id": doc_id}
+        ref = self._client.collection(collection).document(doc_id)
+        try:
+            ref.create(d)
+            return d
+        except AlreadyExists:
+            return ref.get().to_dict()
 
     def put(self, collection, doc_id, doc):
         d = dict(doc)

@@ -31,10 +31,11 @@ class Guardrails(BaseModel):
 
 
 class MandateCompileRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None  # compatibility only; the backend always stamps the caller's UID
     agent_id: str
     text: str = Field(..., description="natural-language mandate from the user")
     ttl_days: int = Field(30, ge=1, le=365)
+    sandbox: bool = False  # named callers can explicitly request a synthetic mandate
 
 
 class Mandate(BaseModel):
@@ -51,6 +52,7 @@ class Mandate(BaseModel):
     version: int = 1
     compiler: Literal["gemini", "heuristic"] = "heuristic"
     compiler_notes: list[str] = Field(default_factory=list)
+    demo_fixture: bool = False  # server-assigned for synthetic session/guest mandates
 
 
 # ---------------------------------------------------------------------------

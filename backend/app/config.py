@@ -15,8 +15,35 @@ def _bool(name: str, default: bool) -> bool:
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _is_deployed() -> bool:
+    # Cloud Run sets K_SERVICE; ANUMATI_ENV=production forces the deployed posture
+    # even off Cloud Run. Either one means "never serve the no-login demo path".
+    return bool(os.getenv("K_SERVICE")) or os.getenv("ANUMATI_ENV", "local") == "production"
+
+
+def _default_auth_mode() -> str:
+    """Zero-config locally, locked down when deployed.
+
+    Honour an explicit ANUMATI_AUTH_MODE if set. Otherwise pick `demo` only when
+    running the local in-memory build (no Firebase project needed, so the sandbox
+    just works), and `firebase` everywhere else — Cloud Run, production, or any
+    Firestore-backed run, all of which require a verified Firebase ID token.
+    """
+    explicit = os.getenv("ANUMATI_AUTH_MODE")
+    if explicit:
+        return explicit.strip().lower()
+    local_memory = os.getenv("ANUMATI_STORE", "memory") == "memory" and not _is_deployed()
+    return "demo" if local_memory else "firebase"
+
+
 @dataclass(frozen=True)
 class Settings:
+    # Local in-memory runs default to the no-login demo path; Cloud Run, production,
+    # and any Firestore-backed run default to Firebase tokens. Override with
+    # ANUMATI_AUTH_MODE. The deployed posture can never fall back to demo.
+    auth_mode: str = field(default_factory=_default_auth_mode)
+    environment: str = os.getenv("ANUMATI_ENV", "local")
+
     # --- storage -------------------------------------------------------
     # "firestore" on Cloud Run, "memory" for local demos/tests.
     store_backend: str = os.getenv("ANUMATI_STORE", "memory")

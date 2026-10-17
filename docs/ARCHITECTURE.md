@@ -88,10 +88,16 @@ flowchart LR
 | `merchant_directory` | seed | API | verified VPA → merchant (NPCI verified-merchant analogue) |
 | `suspect_registry`, `fri_scores` | seed | API | I4C / DoT FRI analogues |
 
-Firestore rules: anonymous-auth reads on the five console collections; **no browser writes**. Composite indexes in `web/firestore.indexes.json`.
+Firestore rules: owner-scoped authenticated reads on the five console collections;
+**no browser writes**. Staff cross-account review uses the API's revocation checks.
+Composite indexes are in `web/firestore.indexes.json`; token flow and local/Firebase
+setup are in [AUTH.md](AUTH.md).
 
 ## Trust boundaries
 
+- **Console tokens stay on trusted origins.** Same-origin Hosting rewrites or the source-configured API base; no saved API overrides on deployed consoles, no automatic request redirects.
+- **Sandbox is a mandate purpose, not a sign-in provider.** Simulations require owner-scoped synthetic mandates; payment flags must match that purpose. Budget/velocity history is partitioned by simulation mode.
+- **Local no-login access is memory-only and owner-scoped.** It grants no staff role, rejects forwarding/non-local origins, and is disabled on Cloud Run/production. Cloud Firestore requires Firebase authentication even from a local backend.
 - **Agent-declared fields are untrusted** (`merchant`, `category`, trace). Payee legitimacy is resolved through the verified merchant directory and explicit allowlists, never through the name the agent typed.
 - **Consumed content is hostile by default.** It is only ever an *input to scoring*; nothing in it is executed or followed.
 - **Gemini is advisory.** Its scores feed fusion but cannot override a hard policy failure, and its absence degrades to heuristics — never to approve-by-default.
@@ -112,9 +118,10 @@ Heuristic-only path: ~1 ms compute, dominated by Firestore I/O.
 
 ```bash
 # local, in-memory, heuristic semantics
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --port 8080
+cd backend && pip install -r requirements.txt
+ANUMATI_AUTH_MODE=demo ANUMATI_STORE=memory ANUMATI_GEMINI=false uvicorn app.main:app --host 127.0.0.1 --port 8080 --no-proxy-headers
 # with Gemini
-GOOGLE_API_KEY=... uvicorn app.main:app --port 8080
+ANUMATI_AUTH_MODE=demo ANUMATI_GEMINI=true GOOGLE_API_KEY=... uvicorn app.main:app --host 127.0.0.1 --port 8080 --no-proxy-headers
 # console
 cd web && python3 -m http.server 5173   # open http://localhost:5173
 # tests + eval
